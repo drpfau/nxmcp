@@ -1,0 +1,103 @@
+unit nxmcp.Tool.ExplainQuery;
+
+interface
+
+uses
+  System.SysUtils,
+  System.JSON,
+  MCPServer.Types,
+  MCPServer.Tool.Base;
+
+type
+  /// <summary>
+  /// Parameters for the explain_query tool
+  /// </summary>
+  TExplainQueryParams = class
+  private
+    FSql: string;
+  public
+    [SchemaDescription('SQL SELECT query to analyze')]
+    property Sql: string read FSql write FSql;
+  end;
+
+  /// <summary>
+  /// MCP Tool that returns the execution plan for a query.
+  /// Uses NexusDB query logging to show how the query will be executed.
+  /// </summary>
+  TExplainQueryTool = class(TMCPToolBase<TExplainQueryParams>)
+  protected
+    function ExecuteWithParams(const Params: TExplainQueryParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+implementation
+
+uses
+  Data.DB,
+  MCPServer.Registration,
+  dmnx;
+
+{ TExplainQueryTool }
+
+constructor TExplainQueryTool.Create;
+begin
+  inherited;
+  FName := 'explain_query';
+  FTitle := 'Explain Query Plan';
+  FDescription := 'Show the execution plan for a SQL query. Returns detailed analysis of ' +
+                  'how NexusDB will execute the query, including index usage and join strategies. ' +
+                  'Uses the #L+ statement switch internally. You can add #I- to disable index optimization ' +
+                  'or #S- to disable simplification to compare different execution plans.';
+end;
+
+function TExplainQueryTool.ExecuteWithParams(const Params: TExplainQueryParams): string;
+var
+  LResultObj: TJSONObject;
+  LPlanArray: TJSONArray;
+  I: Integer;
+begin
+  // Validate parameters
+  if Trim(Params.Sql) = '' then
+    raise Exception.Create('SQL query cannot be empty');
+
+  // Check connection
+  if not Assigned(nxmodule) or not nxmodule.IsConnected then
+    raise Exception.Create('Not connected to NexusDB');
+
+  // Execute query with logging enabled (#L+ prefix)
+  nxmodule.nxQuery1.Close;
+  nxmodule.nxQuery1.SQL.Text := '#L+ ' + Params.Sql;
+  nxmodule.nxQuery1.Open;
+
+  try
+    // Build result from Log property
+    LResultObj := TJSONObject.Create;
+    try
+      LResultObj.AddPair('sql', Params.Sql);
+
+      LPlanArray := TJSONArray.Create;
+      for I := 0 to nxmodule.nxQuery1.Log.Count - 1 do
+        LPlanArray.Add(nxmodule.nxQuery1.Log[I]);
+
+      LResultObj.AddPair('plan', LPlanArray);
+      LResultObj.AddPair('lineCount', TJSONNumber.Create(nxmodule.nxQuery1.Log.Count));
+
+      Result := LResultObj.ToJSON;
+    finally
+      LResultObj.Free;
+    end;
+  finally
+    nxmodule.nxQuery1.Close;
+  end;
+end;
+
+initialization
+  TMCPRegistry.RegisterTool('explain_query',
+    function: IMCPTool
+    begin
+      Result := TExplainQueryTool.Create;
+    end
+  );
+
+end.

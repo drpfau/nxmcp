@@ -1,0 +1,238 @@
+unit nxmcp.Tool.ModifyColumn;
+
+interface
+
+uses
+  System.SysUtils,
+  System.Classes,
+  System.JSON,
+  MCPServer.Types,
+  MCPServer.Tool.Base;
+
+type
+  /// <summary>
+  /// Parameters for the modify_column tool
+  /// </summary>
+  TModifyColumnParams = class
+  private
+    FTableName: string;
+    FColumnName: string;
+    FNewType: string;
+    FNewSize: Integer;
+    FNewName: string;
+  public
+    [SchemaDescription('Name of the table containing the column')]
+    property TableName: string read FTableName write FTableName;
+
+    [SchemaDescription('Current name of the column to modify')]
+    property ColumnName: string read FColumnName write FColumnName;
+
+    [Optional]
+    [SchemaDescription('New column type (optional): AutoInc, ShortString, WideString, Integer, Int64, Word, Byte, Boolean, Float, Currency, DateTime, Date, Time, Blob, Memo')]
+    property NewType: string read FNewType write FNewType;
+
+    [Optional]
+    [SchemaDescription('New size/length for string types (optional)')]
+    property NewSize: Integer read FNewSize write FNewSize;
+
+    [Optional]
+    [SchemaDescription('New name for the column (optional, for renaming)')]
+    property NewName: string read FNewName write FNewName;
+  end;
+
+  /// <summary>
+  /// MCP Tool that modifies a column in an existing table
+  /// </summary>
+  TModifyColumnTool = class(TMCPToolBase<TModifyColumnParams>)
+  protected
+    function ExecuteWithParams(const Params: TModifyColumnParams): string; override;
+  public
+    constructor Create; override;
+  end;
+
+implementation
+
+uses
+  nxsdTypes,
+  nxsdDataDictionary,
+  nxsdServerEngine,
+  nxsdTableMapperDescriptor,
+  nxsdRecordMapperDescriptor,
+  nxllException,
+  MCPServer.Registration,
+  dmnx;
+
+function StringToFieldType(const AType: string): TnxFieldType;
+var
+  LType: string;
+begin
+  LType := LowerCase(AType);
+  if LType = 'autoinc' then Result := nxtAutoInc
+  else if LType = 'shortstring' then Result := nxtShortString
+  else if LType = 'widestring' then Result := nxtWideString
+  else if LType = 'integer' then Result := nxtInt32
+  else if LType = 'int64' then Result := nxtInt64
+  else if LType = 'word' then Result := nxtWord16
+  else if LType = 'byte' then Result := nxtByte
+  else if LType = 'boolean' then Result := nxtBoolean
+  else if LType = 'float' then Result := nxtDouble
+  else if LType = 'currency' then Result := nxtCurrency
+  else if LType = 'datetime' then Result := nxtDateTime
+  else if LType = 'date' then Result := nxtDate
+  else if LType = 'time' then Result := nxtTime
+  else if LType = 'blob' then Result := nxtBlob
+  else if LType = 'memo' then Result := nxtBlobMemo
+  else
+    raise Exception.CreateFmt('Unknown field type: %s', [AType]);
+end;
+
+{ TModifyColumnTool }
+
+constructor TModifyColumnTool.Create;
+begin
+  inherited;
+  FName := 'modify_column';
+  FTitle := 'Modify Column';
+  FDescription := 'Modify a column in an existing table. Can change type, size, or rename the column.';
+end;
+
+function TModifyColumnTool.ExecuteWithParams(const Params: TModifyColumnParams): string;
+var
+  LResultObj: TJSONObject;
+  LOldDict, LNewDict: TnxDataDictionary;
+  LMapper: TnxTableMapperDescriptor;
+  LTaskInfo: TnxAbstractTaskInfo;
+  LCompleted: Boolean;
+  LTaskStatus: TnxTaskStatus;
+  LFieldIdx: Integer;
+  LChanges: TStringList;
+  LIsRename: Boolean;
+begin
+  // Validate parameters
+  if Trim(Params.TableName) = '' then
+    raise Exception.Create('Table name cannot be empty');
+
+  if Trim(Params.ColumnName) = '' then
+    raise Exception.Create('Column name cannot be empty');
+
+  // Check that at least one modification is specified
+  if (Trim(Params.NewType) = '') and (Params.NewSize = 0) and (Trim(Params.NewName) = '') then
+    raise Exception.Create('At least one modification (newType, newSize, or newName) must be specified');
+
+  // Check connection
+  if not Assigned(nxmodule) or not nxmodule.IsConnected then
+    raise Exception.Create('Not connected to NexusDB');
+
+  // Close any open tables to avoid conflicts
+  nxmodule.nxSession1.CloseInactiveTables;
+
+  LChanges := TStringList.Create;
+  try
+    LIsRename := (Trim(Params.NewName) <> '') and (not SameText(Params.NewName, Params.ColumnName));
+
+    LOldDict := TnxDataDictionary.Create;
+    try
+      // Get existing dictionary
+      nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(Params.TableName, nxmodule.TablePassword, LOldDict));
+
+      // Check if column exists
+      LFieldIdx := LOldDict.FieldsDescriptor.GetFieldFromName(Params.ColumnName);
+      if LFieldIdx < 0 then
+        raise Exception.CreateFmt('Column "%s" not found in table "%s"', [Params.ColumnName, Params.TableName]);
+
+      // Create new dictionary with modifications
+      LNewDict := TnxDataDictionary.Create;
+      try
+        LNewDict.Assign(LOldDict);
+
+        // Get field index in new dictionary
+        LFieldIdx := LNewDict.FieldsDescriptor.GetFieldFromName(Params.ColumnName);
+
+        // Apply type change
+        if Trim(Params.NewType) <> '' then
+        begin
+          LNewDict.FieldsDescriptor.FieldDescriptor[LFieldIdx].fdType := StringToFieldType(Params.NewType);
+          LChanges.Add('type=' + Params.NewType);
+        end;
+
+        // Apply size change
+        if Params.NewSize > 0 then
+        begin
+          LNewDict.FieldsDescriptor.FieldDescriptor[LFieldIdx].fdUnits := Params.NewSize;
+          LChanges.Add('size=' + IntToStr(Params.NewSize));
+        end;
+
+        // Apply rename
+        if LIsRename then
+        begin
+          LNewDict.FieldsDescriptor.FieldDescriptor[LFieldIdx].ChangeName(Params.NewName);
+          LChanges.Add('renamed=' + Params.NewName);
+        end;
+
+        // Check if restructure is needed
+        if LOldDict.IsEqual(LNewDict) then
+          raise Exception.Create('No changes detected');
+
+        // Create mapper and restructure
+        LMapper := TnxTableMapperDescriptor.Create;
+        try
+          LMapper.MapAllTablesAndFieldsByName(LOldDict, LNewDict);
+
+          // Add rename mapping if needed
+          if LIsRename then
+            TnxRecordMapperDescriptor(LMapper.RecordMapper).AddMapping(Params.ColumnName, Params.NewName);
+
+          nxCheck(nxmodule.nxDatabase1.RestructureTableEx(Params.TableName, nxmodule.TablePassword,
+            LNewDict, LMapper, LTaskInfo));
+
+          // Wait for completion
+          if Assigned(LTaskInfo) then
+          try
+            while True do
+            begin
+              LTaskInfo.GetStatus(LCompleted, LTaskStatus);
+              if LCompleted then
+                Break;
+              Sleep(100);
+            end;
+            nxCheck(LTaskStatus.tsErrorCode);
+          finally
+            LTaskInfo.Free;
+          end;
+        finally
+          LMapper.Free;
+        end;
+      finally
+        LNewDict.Free;
+      end;
+    finally
+      LOldDict.Free;
+    end;
+
+    // Build result
+    LResultObj := TJSONObject.Create;
+    try
+      LResultObj.AddPair('success', TJSONBool.Create(True));
+      LResultObj.AddPair('tableName', Params.TableName);
+      LResultObj.AddPair('columnName', Params.ColumnName);
+      LResultObj.AddPair('changes', LChanges.CommaText);
+      if LIsRename then
+        LResultObj.AddPair('newColumnName', Params.NewName);
+      Result := LResultObj.ToJSON;
+    finally
+      LResultObj.Free;
+    end;
+  finally
+    LChanges.Free;
+  end;
+end;
+
+initialization
+  TMCPRegistry.RegisterTool('modify_column',
+    function: IMCPTool
+    begin
+      Result := TModifyColumnTool.Create;
+    end
+  );
+
+end.
