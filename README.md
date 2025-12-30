@@ -7,13 +7,14 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 * **Query Execution** - Run SELECT queries and retrieve results as JSON
 * **Data Manipulation** - Insert, update, and delete records
 * **Schema Management** - Create tables, add columns, manage indexes
-* **Discovery** - List tables, view schemas, get table structures
+* **Discovery** - List tables, view schemas, get table structures, list indexes
+* **Utility** - Count records, show query execution plan
 
 ## Requirements
 
 * Delphi (RAD Studio 13) with NexusDB Komponente
 * NexusDB NXserver running and accessible
-* https://github.com/GDKsoftware/Delphi-MCP-Server
+* https://github.com/GDKsoftware/Delphi-MCP-Server (may have additional depencies)
 * https://github.com/viniciussanchez/dataset-serialize
 * Windows OS
 
@@ -22,19 +23,19 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 Edit `Source/nxconfig.ini` and put it next to the executable before running:
 
 ```ini
-\[Connection]
+[Connection]
 ServerHost=localhost
 ServerPort=16000
 
-\[Database]
+[Database]
 AliasName=YourDatabaseAlias
-TablePassword=optional\_table\_password
+TablePassword=optional_table_password
 
-\[Authentication]
-Username=your\_username
-Password=your\_password
+[Authentication]
+Username=your_username
+Password=your_password
 
-\[Options]
+[Options]
 AutoConnect=1
 Timeout=30000
 ```
@@ -43,25 +44,25 @@ Edit `Source/settings.ini` and put it next to the executable before running:
 
 ```ini
 ; for a detailed example check https://github.com/GDKsoftware/Delphi-MCP-Server
-\[Server]
+[Server]
 Port=3000
 Host=localhost
 Name=nxmcp
 Version=1.0.0
 Endpoint=/mcp
 ; Server configuration=
-\[CORS]
+[CORS]
 Enabled=1
 AllowedOrigins=http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1
 ; Comma-separated list of allowed origins=
 ; Cross-Origin Resource Sharing configuration=
-\[SSL]
+[SSL]
 Enabled=0
 CertFile=
 KeyFile=
 RootCertFile=
-; SSL/TLS configuration (optional)=
-```
+```  
+
 
 ## Building
 
@@ -83,57 +84,57 @@ The server starts on `http://localhost:3000/mcp` by default.
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `execute\_query` | Run SELECT queries | `sql` |
-| `get\_table\_schema` | Get table structure | `tableName` |
+| `execute_query` | Run SELECT queries | `sql` |
+| `get_table_schema` | Get table structure | `tableName` |
 
 ### Data Manipulation
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `get\_table\_data` | Read table data with pagination | `tableName`, `maxRows?`, `offset?`, `orderBy?` |
-| `insert\_record` | Insert a new record | `tableName`, `data` (JSON string) |
-| `update\_records` | Update matching records | `tableName`, `data` (JSON string), `whereClause` |
-| `delete\_records` | Delete matching records | `tableName`, `whereClause` |
-| `execute\_sql` | Run INSERT/UPDATE/DELETE | `sql` |
+| `get_table_data` | Read table data with pagination | `tableName`, `maxRows?`, `offset?`, `orderBy?` |
+| `insert_record` | Insert a new record | `tableName`, `data` (JSON string) |
+| `update_records` | Update matching records | `tableName`, `data` (JSON string), `whereClause` |
+| `delete_records` | Delete matching records | `tableName`, `whereClause` |
+| `execute_sql` | Run INSERT/UPDATE/DELETE | `sql` |
 
 ### Schema Management
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `create\_table` | Create a new table | `tableName`, `columns` (JSON array) |
-| `drop\_table` | Delete a table | `tableName` |
-| `copy\_table` | Clone a table | `sourceTable`, `targetTable`, `copyData?` |
-| `rename\_table` | Rename a table | `oldName`, `newName` |
-| `add\_column` | Add a column | `tableName`, `columnName`, `columnType`, `size?`, `defaultValueType?` |
-| `drop\_column` | Remove a column | `tableName`, `columnName` |
-| `modify\_column` | Modify a column | `tableName`, `columnName`, `newType?`, `newSize?`, `newName?` |
-| `create\_index` | Create an index | `tableName`, `indexName`, `columns`, `unique?` |
-| `drop\_index` | Remove an index | `tableName`, `indexName` |
+| `create_table` | Create a new table | `tableName`, `columns` (JSON array) |
+| `drop_table` | Delete a table | `tableName` |
+| `copy_table` | Clone a table | `sourceTable`, `targetTable`, `copyData?` |
+| `rename_table` | Rename a table | `oldName`, `newName` |
+| `add_column` | Add a column | `tableName`, `columnName`, `columnType`, `size?`, `defaultValueType?` |
+| `drop_column` | Remove a column | `tableName`, `columnName` |
+| `modify_column` | Modify a column | `tableName`, `columnName`, `newType?`, `newSize?`, `newName?` |
+| `create_index` | Create an index | `tableName`, `indexName`, `columns`, `unique?` |
+| `drop_index` | Remove an index | `tableName`, `indexName` |
 
 ### Table Maintenance
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `empty\_table` | Delete all records (keeps structure) | `tableName` |
-| `pack\_table` | Compact table, reclaim deleted space | `tableName` |
-| `reindex\_table` | Rebuild an index | `tableName`, `indexName` |
-| `recover\_table` | Recover records from broken table | `tableName` |
-| `change\_password` | Change table password | `tableName`, `oldPassword`, `newPassword` |
-| `get\_autoinc\_value` | Get next auto-increment value | `tableName` |
+| `empty_table` | Delete all records (keeps structure) | `tableName` |
+| `pack_table` | Compact table, reclaim deleted space | `tableName` |
+| `reindex_table` | Rebuild an index | `tableName`, `indexName` |
+| `recover_table` | Recover records from broken table | `tableName` |
+| `change_password` | Change table password | `tableName`, `oldPassword`, `newPassword` |
+| `get_autoinc_value` | Get next auto-increment value | `tableName` |
 
 ### Transactions
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `batch\_execute` | Execute multiple SQL in one transaction | `statements` (JSON array), `snapshot?` |
+| `batch_execute` | Execute multiple SQL in one transaction | `statements` (JSON array), `snapshot?` |
 
 ### Utility
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `count\_records` | Fast record count via metadata | `tableName` |
-| `list\_indexes` | List all indexes on a table | `tableName` |
-| `explain\_query` | Show query execution plan | `sql` |
+| `count_records` | Fast record count via metadata | `tableName` |
+| `list_indexes` | List all indexes on a table | `tableName` |
+| `explain_query` | Show query execution plan | `sql` |
 
 ## Available Resources
 
@@ -145,7 +146,7 @@ The server starts on `http://localhost:3000/mcp` by default.
 
 ## Column Types
 
-For `create\_table` and `add\_column`:
+For `create_table` and `add_column`:
 
 * `AutoInc` - Auto-incrementing integer
 * `ShortString` - ANSI string (specify size)
@@ -165,7 +166,7 @@ For `create\_table` and `add\_column`:
 
 ## Default Value Types
 
-For `add\_column`:
+For `add_column`:
 
 * `CurrentDateTime` - Auto-populate with current timestamp
 * `CurrentUser` - Auto-populate with current user
@@ -190,10 +191,10 @@ Example: `#T 10000 SELECT * FROM LargeTable WHERE Status = 'Active'`
 
 ```json
 {
-  "name": "create\_table",
+  "name": "create_table",
   "arguments": {
     "tableName": "Customers",
-    "columns": "\[{\\"name\\":\\"ID\\",\\"type\\":\\"AutoInc\\"},{\\"name\\":\\"Name\\",\\"type\\":\\"ShortString\\",\\"size\\":100},{\\"name\\":\\"Email\\",\\"type\\":\\"ShortString\\",\\"size\\":255}]"
+    "columns": "[{"name":"ID","type":"AutoInc"},{"name":"Name","type":"ShortString","size":100},{"name":"Email","type":"ShortString","size":255}]"
   }
 }
 ```
@@ -202,10 +203,10 @@ Example: `#T 10000 SELECT * FROM LargeTable WHERE Status = 'Active'`
 
 ```json
 {
-  "name": "insert\_record",
+  "name": "insert_record",
   "arguments": {
     "tableName": "Customers",
-    "data": "{\\"Name\\":\\"John Doe\\",\\"Email\\":\\"john@example.com\\"}"
+    "data": "{"Name":"John Doe","Email":"john@example.com"}"
   }
 }
 ```
@@ -214,30 +215,28 @@ Example: `#T 10000 SELECT * FROM LargeTable WHERE Status = 'Active'`
 
 ```json
 {
-  "name": "execute\_query",
+  "name": "execute_query",
   "arguments": {
-    "sql": "SELECT \* FROM Customers WHERE Name LIKE 'J%'"
+    "sql": "SELECT * FROM Customers WHERE Name LIKE 'J%'"
   }
 }
+```
+
+## Integration with Claude Code
+
+Simply run 
+```bash
+ claude mcp add --transport http nxmcp http://localhost:3000/mcp
 ```
 
 ## Integration with Claude Desktop
 
-Add to your Claude Desktop MCP configuration:
+Claude Desktop (currently?) does not support `localhost` URLs. You can try a proxy like `node mcp-remote`.
 
-```json
-{
-  "mcpServers": {
-    "nxmcp": {
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
-```
 
 ## License
 
-MIT License
+The MIT License (MIT)
 
 Copyright (c) 2025 Dr. Pfau Fernwirktechnik GmbH
 
@@ -246,3 +245,4 @@ Permission is hereby granted, free of charge, to any person obtaining a copy of 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
