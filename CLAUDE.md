@@ -85,7 +85,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|-------------|
 | `count_records` | Get record count using table metadata (fast, no scan) |
 | `list_indexes` | List all indexes on a table |
-| `explain_query` | Show query execution plan (index usage, join strategy) |
+| `explain_query` | Show query execution plan (standard or verbose mode) |
 
 **batch_execute usage:**
 ```json
@@ -125,7 +125,8 @@ Prefix SQL with switches to control execution:
 | `#B` | `#B+` / `#B-` | BLOB copying (default `-`: link only) |
 | `#I` | `#I+` / `#I-` | Index optimization (default `+`: on) |
 | `#S` | `#S+` / `#S-` | Query simplification (default `+`: on) |
-| `#L` | `#L+` / `#L-` | Query logging for execution plan |
+| `#L` | `#L+` / `#L-` | Query logging: plan summary, index used, join strategy |
+| `#V` | `#V+` / `#V-` | Verbose logging: full optimizer decisions, all indexes considered, relation analysis |
 | `#T` | `#T 5000` | Timeout in milliseconds |
 
 ```pascal

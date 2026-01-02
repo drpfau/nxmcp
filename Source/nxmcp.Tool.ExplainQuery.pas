@@ -15,9 +15,12 @@ type
   TExplainQueryParams = class
   private
     FSql: string;
+    FVerbose: Boolean;
   public
     [SchemaDescription('SQL SELECT query to analyze')]
     property Sql: string read FSql write FSql;
+    [SchemaDescription('Use verbose mode (#V+) for full optimizer internals: all indexes considered, relation analysis, decision process. Default is standard mode (#L+) showing plan summary.')]
+    property Verbose: Boolean read FVerbose write FVerbose;
   end;
 
   /// <summary>
@@ -34,6 +37,7 @@ type
 implementation
 
 uses
+  System.StrUtils,
   Data.DB,
   MCPServer.Registration,
   dmnx;
@@ -45,16 +49,19 @@ begin
   inherited;
   FName := 'explain_query';
   FTitle := 'Explain Query Plan';
-  FDescription := 'Show the execution plan for a SQL query. Returns detailed analysis of ' +
-                  'how NexusDB will execute the query, including index usage and join strategies. ' +
-                  'Uses the #L+ statement switch internally. You can add #I- to disable index optimization ' +
-                  'or #S- to disable simplification to compare different execution plans.';
+  FDescription := 'Show the execution plan for a SQL query. ' +
+                  'Standard mode (#L+) shows plan summary: index used, join strategy, rows read. ' +
+                  'Verbose mode (#V+) shows full optimizer internals: all available indexes, ' +
+                  'relation analysis, index selection decisions, simplification steps. ' +
+                  'You can add #I- to disable index optimization or #S- to disable simplification ' +
+                  'to compare different execution plans.';
 end;
 
 function TExplainQueryTool.ExecuteWithParams(const Params: TExplainQueryParams): string;
 var
   LResultObj: TJSONObject;
   LPlanArray: TJSONArray;
+  LSwitch: string;
   I: Integer;
 begin
   // Validate parameters
@@ -65,9 +72,15 @@ begin
   if not Assigned(nxmodule) or not nxmodule.IsConnected then
     raise Exception.Create('Not connected to NexusDB');
 
-  // Execute query with logging enabled (#L+ prefix)
+  // Choose logging switch: #V+ for verbose, #L+ for standard
+  if Params.Verbose then
+    LSwitch := '#V+'
+  else
+    LSwitch := '#L+';
+
+  // Execute query with logging enabled
   nxmodule.nxQuery1.Close;
-  nxmodule.nxQuery1.SQL.Text := '#L+ ' + Params.Sql;
+  nxmodule.nxQuery1.SQL.Text := LSwitch + ' ' + Params.Sql;
   nxmodule.nxQuery1.Open;
 
   try
@@ -75,6 +88,7 @@ begin
     LResultObj := TJSONObject.Create;
     try
       LResultObj.AddPair('sql', Params.Sql);
+      LResultObj.AddPair('mode', IfThen(Params.Verbose, 'verbose', 'standard'));
 
       LPlanArray := TJSONArray.Create;
       for I := 0 to nxmodule.nxQuery1.Log.Count - 1 do
