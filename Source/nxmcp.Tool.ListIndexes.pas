@@ -35,6 +35,9 @@ implementation
 uses
   Data.DB,
   DataSet.Serialize,
+  nxsdTypes,
+  nxsdDataDictionary,
+  nxllException,
   MCPServer.Registration,
   dmnx;
 
@@ -53,7 +56,11 @@ var
   LResultObj: TJSONObject;
   LIndexesArray: TJSONArray;
   LIndexObj: TJSONObject;
-  LIndexCount: Integer;
+  LFieldsArray: TJSONArray;
+  LDict: TnxDataDictionary;
+  LIndex: TnxIndexDescriptor;
+  LKeyDesc: TnxCompKeyDescriptor;
+  I, J: Integer;
 begin
   // Validate parameters
   if Trim(Params.TableName) = '' then
@@ -63,42 +70,54 @@ begin
   if not Assigned(nxmodule) or not nxmodule.IsConnected then
     raise Exception.Create('Not connected to NexusDB');
 
-  // Query system table for indexes
-  nxmodule.nxQuery1.Close;
-  nxmodule.nxQuery1.SQL.Text :=
-    'SELECT INDEX_NAME, INDEX_ALLOWSDUPS, INDEX_ISDEFAULT, CONSTRAINT_NAME ' +
-    'FROM #INDEXES WHERE TABLE_NAME = ''' + Params.TableName + ''' ' +
-    'ORDER BY INDEX_INDEX';
-  nxmodule.nxQuery1.Open;
-
   LResultObj := TJSONObject.Create;
   try
     LIndexesArray := TJSONArray.Create;
-    LIndexCount := 0;
 
-    while not nxmodule.nxQuery1.Eof do
-    begin
-      LIndexObj := TJSONObject.Create;
-      LIndexObj.AddPair('name', nxmodule.nxQuery1.FieldByName('INDEX_NAME').AsString);
-      LIndexObj.AddPair('unique', TJSONBool.Create(
-        nxmodule.nxQuery1.FieldByName('INDEX_ALLOWSDUPS').AsString = 'NO'));
-      LIndexObj.AddPair('isDefault', TJSONBool.Create(
-        nxmodule.nxQuery1.FieldByName('INDEX_ISDEFAULT').AsBoolean));
-      LIndexObj.AddPair('constraint', nxmodule.nxQuery1.FieldByName('CONSTRAINT_NAME').AsString);
-      LIndexesArray.AddElement(LIndexObj);
+    LDict := TnxDataDictionary.Create;
+    try
+      nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(
+        Params.TableName, nxmodule.TablePassword, LDict));
 
-      Inc(LIndexCount);
-      nxmodule.nxQuery1.Next;
+      if Assigned(LDict.IndicesDescriptor) then
+      begin
+        for I := 0 to LDict.IndicesDescriptor.IndexCount - 1 do
+        begin
+          LIndex := LDict.IndicesDescriptor.IndexDescriptor[I];
+          LIndexObj := TJSONObject.Create;
+          LIndexObj.AddPair('name', LIndex.Name);
+          LIndexObj.AddPair('unique', TJSONBool.Create(LIndex.Dups = idNone));
+          LIndexObj.AddPair('isDefault', TJSONBool.Create(
+            LDict.IndicesDescriptor.DefaultIndex = LIndex.Number));
+
+          // Get fields for this index
+          LFieldsArray := TJSONArray.Create;
+          if LIndex.KeyDescriptor is TnxCompKeyDescriptor then
+          begin
+            LKeyDesc := TnxCompKeyDescriptor(LIndex.KeyDescriptor);
+            for J := 0 to LKeyDesc.KeyFieldCount - 1 do
+            begin
+              if LKeyDesc.KeyFields[J].FieldNumber >= 0 then
+                LFieldsArray.Add(LKeyDesc.KeyFields[J].Field.Name);
+            end;
+          end;
+          LIndexObj.AddPair('fields', LFieldsArray);
+
+          LIndexesArray.AddElement(LIndexObj);
+        end;
+      end;
+    finally
+      LDict.Free;
     end;
 
     // Build result
     LResultObj.AddPair('tableName', Params.TableName);
-    LResultObj.AddPair('indexCount', TJSONNumber.Create(LIndexCount));
+    LResultObj.AddPair('indexCount', TJSONNumber.Create(LIndexesArray.Count));
     LResultObj.AddPair('indexes', LIndexesArray);
     Result := LResultObj.ToJSON;
-  finally
-    nxmodule.nxQuery1.Close;
+  except
     LResultObj.Free;
+    raise;
   end;
 end;
 

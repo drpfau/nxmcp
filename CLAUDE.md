@@ -84,7 +84,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Tool | Description |
 |------|-------------|
 | `count_records` | Get record count using table metadata (fast, no scan) |
-| `list_indexes` | List all indexes on a table |
+| `list_indexes` | List all indexes on a table with their fields |
 | `explain_query` | Show query execution plan (standard or verbose mode) |
 
 **batch_execute usage:**
