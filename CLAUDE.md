@@ -10,8 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `Source/` - Main source code
   - `nxmcp.dpr` - Main program
-  - `dmnx.pas` - NexusDB connection DataModule
-  - `nxconfig.ini` - Configuration file
+  - `dmnx.pas` - NexusDB connection DataModule (auto-creates `nxmcp.ini` on first run)
   - `nxmcp.Resource.*.pas` - MCP resource implementations
   - `nxmcp.Tool.*.pas` - MCP tool implementations
 - `sample code/` - Reference code for NexusDB and MCP development

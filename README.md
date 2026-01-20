@@ -20,43 +20,49 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 
 ## Configuration
 
-Edit `Source/nxconfig.ini` and put it next to the executable before running:
+On first run, `nxmcp.ini` is automatically created next to the executable with default values. Edit it to configure both the NexusDB connection and MCP server:
 
 ```ini
 [Connection]
+; NXserver host address
 ServerHost=localhost
+; NXserver port (default: 16000)
 ServerPort=16000
 
 [Database]
-AliasName=YourDatabaseAlias
-TablePassword=optional_table_password
+; Database alias as configured on the NXserver
+AliasName=YourAlias
+; Table password (leave empty if not used)
+TablePassword=
 
 [Authentication]
+; NexusDB username
 Username=your_username
+; NexusDB password
 Password=your_password
 
 [Options]
+; Automatically connect on startup (1=yes, 0=no)
 AutoConnect=1
+; Connection timeout in milliseconds
 Timeout=30000
-```
 
-Edit `Source/settings.ini` and put it next to the executable before running:
-
-```ini
-; for a detailed example check https://github.com/GDKsoftware/Delphi-MCP-Server
 [Server]
+; MCP server configuration
 Port=3000
 Host=localhost
 Name=nxmcp
 Version=1.0.0
 Endpoint=/mcp
-; Server configuration=
+
 [CORS]
+; Cross-Origin Resource Sharing configuration
 Enabled=1
+; Comma-separated list of allowed origins
 AllowedOrigins=http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1
-; Comma-separated list of allowed origins=
-; Cross-Origin Resource Sharing configuration=
+
 [SSL]
+; SSL/TLS configuration (optional)
 Enabled=0
 CertFile=
 KeyFile=

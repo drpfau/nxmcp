@@ -73,8 +73,8 @@ begin
     end;
     Writeln;
 
-    // Initialize MCP server
-    Settings := TMCPSettings.Create;
+    // Initialize MCP server (uses unified config file)
+    Settings := TMCPSettings.Create(nxmodule.GetConfigPath);
     try
       ManagerRegistry := TMCPManagerRegistry.Create;
       ManagerRegistry.RegisterManager(TMCPCoreManager.Create(Settings));

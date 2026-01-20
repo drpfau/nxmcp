@@ -29,7 +29,9 @@ type
     FPassword: string;
     FAutoConnect: Boolean;
     FTimeout: Integer;
+    FConfigPath: string;
     procedure LoadConfig;
+    procedure CreateDefaultConfig;
     procedure ConfigureComponents;
     procedure ConfigureSerializer;
   public
@@ -37,6 +39,7 @@ type
     procedure Disconnect;
     function IsConnected: Boolean;
     function GetLastError: string;
+    function GetConfigPath: string;
     property ServerHost: string read FServerHost;
     property ServerPort: Integer read FServerPort;
     property AliasName: string read FAliasName;
@@ -74,7 +77,6 @@ end;
 procedure Tnxmodule.LoadConfig;
 var
   LIniFile: TMemIniFile;
-  LConfigPath: string;
 begin
   // Default values
   FServerHost := 'localhost';
@@ -86,16 +88,14 @@ begin
   FAutoConnect := True;
   FTimeout := 30000;
 
-  // Find config file next to executable
-  LConfigPath := ExtractFilePath(ParamStr(0)) + 'nxconfig.ini';
+  // Unified config file path
+  FConfigPath := ExtractFilePath(ParamStr(0)) + 'nxmcp.ini';
 
-  if not FileExists(LConfigPath) then
-  begin
-    GLastError := 'Configuration file not found: ' + LConfigPath;
-    Exit;
-  end;
+  // Auto-create config file if it doesn't exist
+  if not FileExists(FConfigPath) then
+    CreateDefaultConfig;
 
-  LIniFile := TMemIniFile.Create(LConfigPath);
+  LIniFile := TMemIniFile.Create(FConfigPath);
   try
     // Connection section
     FServerHost := LIniFile.ReadString('Connection', 'ServerHost', FServerHost);
@@ -115,6 +115,71 @@ begin
   finally
     LIniFile.Free;
   end;
+end;
+
+procedure Tnxmodule.CreateDefaultConfig;
+var
+  LIniFile: TMemIniFile;
+begin
+  LIniFile := TMemIniFile.Create(FConfigPath);
+  try
+    // Header comment
+    LIniFile.WriteString('Connection', '; nxmcp - NexusDB MCP Server Configuration', '');
+
+    // Connection section
+    LIniFile.WriteString('Connection', '; NXserver host address', '');
+    LIniFile.WriteString('Connection', 'ServerHost', 'localhost');
+    LIniFile.WriteString('Connection', '; NXserver port (default: 16000)', '');
+    LIniFile.WriteInteger('Connection', 'ServerPort', 16000);
+
+    // Database section
+    LIniFile.WriteString('Database', '; Database alias as configured on the NXserver', '');
+    LIniFile.WriteString('Database', 'AliasName', 'YourAlias');
+    LIniFile.WriteString('Database', '; Table password (leave empty if not used)', '');
+    LIniFile.WriteString('Database', 'TablePassword', '');
+
+    // Authentication section
+    LIniFile.WriteString('Authentication', '; NexusDB username', '');
+    LIniFile.WriteString('Authentication', 'Username', 'your_username');
+    LIniFile.WriteString('Authentication', '; NexusDB password', '');
+    LIniFile.WriteString('Authentication', 'Password', 'your_password');
+
+    // Options section
+    LIniFile.WriteString('Options', '; Automatically connect on startup (1=yes, 0=no)', '');
+    LIniFile.WriteBool('Options', 'AutoConnect', True);
+    LIniFile.WriteString('Options', '; Connection timeout in milliseconds', '');
+    LIniFile.WriteInteger('Options', 'Timeout', 30000);
+
+    // MCP Server section
+    LIniFile.WriteString('Server', '; MCP server configuration', '');
+    LIniFile.WriteInteger('Server', 'Port', 3000);
+    LIniFile.WriteString('Server', 'Host', 'localhost');
+    LIniFile.WriteString('Server', 'Name', 'nxmcp');
+    LIniFile.WriteString('Server', 'Version', '1.0.0');
+    LIniFile.WriteString('Server', 'Endpoint', '/mcp');
+
+    // CORS section
+    LIniFile.WriteString('CORS', '; Cross-Origin Resource Sharing configuration', '');
+    LIniFile.WriteBool('CORS', 'Enabled', True);
+    LIniFile.WriteString('CORS', '; Comma-separated list of allowed origins', '');
+    LIniFile.WriteString('CORS', 'AllowedOrigins', 'http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1');
+
+    // SSL section
+    LIniFile.WriteString('SSL', '; SSL/TLS configuration (optional)', '');
+    LIniFile.WriteBool('SSL', 'Enabled', False);
+    LIniFile.WriteString('SSL', 'CertFile', '');
+    LIniFile.WriteString('SSL', 'KeyFile', '');
+    LIniFile.WriteString('SSL', 'RootCertFile', '');
+
+    LIniFile.UpdateFile;
+  finally
+    LIniFile.Free;
+  end;
+end;
+
+function Tnxmodule.GetConfigPath: string;
+begin
+  Result := FConfigPath;
 end;
 
 procedure Tnxmodule.ConfigureComponents;
