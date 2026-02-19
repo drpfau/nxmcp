@@ -24,6 +24,9 @@ type
     FServerHost: string;
     FServerPort: Integer;
     FAliasName: string;
+    FDefaultAliasName: string;
+    FDefaultServerHost: string;
+    FDefaultServerPort: Integer;
     FTablePassword: string;
     FUsername: string;
     FPassword: string;
@@ -40,9 +43,17 @@ type
     function IsConnected: Boolean;
     function GetLastError: string;
     function GetConfigPath: string;
+    function GetAliasNames: TStringList;
+    function SwitchDatabase(const AAliasName: string;
+      const ATablePassword: string = ''): Boolean;
+    function SwitchServer(const AServerHost: string; AServerPort: Integer;
+      const AAliasName: string = ''; const ATablePassword: string = ''): Boolean;
     property ServerHost: string read FServerHost;
     property ServerPort: Integer read FServerPort;
     property AliasName: string read FAliasName;
+    property DefaultAliasName: string read FDefaultAliasName;
+    property DefaultServerHost: string read FDefaultServerHost;
+    property DefaultServerPort: Integer read FDefaultServerPort;
     property TablePassword: string read FTablePassword;
   end;
 
@@ -83,13 +94,13 @@ begin
   FServerPort := 16000;
   FAliasName := '';
   FTablePassword := '';
-  FUsername := 'SYSDBA';
-  FPassword := 'masterkey';
+  FUsername := 'Administrator';
+  FPassword := 'NexusDB';
   FAutoConnect := True;
-  FTimeout := 30000;
+  FTimeout := 3000;
 
   // Unified config file path
-  FConfigPath := ExtractFilePath(ParamStr(0)) + 'nxmcp.ini';
+  FConfigPath := ChangeFileExt(ParamStr(0), '.ini');
 
   // Auto-create config file if it doesn't exist
   if not FileExists(FConfigPath) then
@@ -100,9 +111,12 @@ begin
     // Connection section
     FServerHost := LIniFile.ReadString('Connection', 'ServerHost', FServerHost);
     FServerPort := LIniFile.ReadInteger('Connection', 'ServerPort', FServerPort);
+    FDefaultServerHost := FServerHost;
+    FDefaultServerPort := FServerPort;
 
     // Database section
     FAliasName := LIniFile.ReadString('Database', 'AliasName', FAliasName);
+    FDefaultAliasName := FAliasName;
     FTablePassword := LIniFile.ReadString('Database', 'TablePassword', FTablePassword);
 
     // Authentication section
@@ -135,7 +149,7 @@ begin
     // Database section
     LIniFile.WriteString('Database', '; Database alias as configured on the NXserver', '');
     LIniFile.WriteString('Database', 'AliasName', 'YourAlias');
-    LIniFile.WriteString('Database', '; Table password (leave empty if not used)', '');
+    LIniFile.WriteString('Database', '; Table passwords, comma separated (leave empty if not used)', '');
     LIniFile.WriteString('Database', 'TablePassword', '');
 
     // Authentication section
@@ -148,7 +162,7 @@ begin
     LIniFile.WriteString('Options', '; Automatically connect on startup (1=yes, 0=no)', '');
     LIniFile.WriteBool('Options', 'AutoConnect', True);
     LIniFile.WriteString('Options', '; Connection timeout in milliseconds', '');
-    LIniFile.WriteInteger('Options', 'Timeout', 30000);
+    LIniFile.WriteInteger('Options', 'Timeout', 3000);
 
     // MCP Server section
     LIniFile.WriteString('Server', '; MCP server configuration', '');
@@ -287,6 +301,191 @@ end;
 function Tnxmodule.GetLastError: string;
 begin
   Result := GLastError;
+end;
+
+function Tnxmodule.GetAliasNames: TStringList;
+begin
+  Result := TStringList.Create;
+  try
+    // Session must be active to list aliases (database does not need to be connected)
+    if not nxSession1.Active then
+      raise Exception.Create('Session is not active. Cannot list aliases.');
+
+    nxSession1.GetAliasNames(Result);
+  except
+    on E: Exception do
+    begin
+      Result.Free;
+      raise;
+    end;
+  end;
+end;
+
+function Tnxmodule.SwitchDatabase(const AAliasName: string;
+  const ATablePassword: string): Boolean;
+var
+  LOldAlias: string;
+  LOldPassword: string;
+begin
+  Result := False;
+  GLastError := '';
+
+  if Trim(AAliasName) = '' then
+  begin
+    GLastError := 'Alias name cannot be empty';
+    raise Exception.Create(GLastError);
+  end;
+
+  // Save current state for rollback
+  LOldAlias := FAliasName;
+  LOldPassword := FTablePassword;
+
+  try
+    // Close open datasets that depend on the database
+    if nxQuery1.Active then
+      nxQuery1.Close;
+    if nxTable1.Active then
+      nxTable1.Close;
+
+    // Release cached table handles
+    nxSession1.CloseInactiveTables;
+
+    // Close the database connection
+    if nxDatabase1.Connected then
+      nxDatabase1.Close;
+
+    // Switch to new alias
+    FAliasName := AAliasName;
+    FTablePassword := ATablePassword;
+    nxDatabase1.AliasName := AAliasName;
+
+    // Reopen the database
+    nxDatabase1.Open;
+
+    // Apply table password if provided
+    if (ATablePassword <> '') and nxDatabase1.Connected then
+    begin
+      nxQuery1.Close;
+      nxQuery1.SQL.Text := 'SET PASSWORDS ADD ''' + ATablePassword + '''';
+      nxQuery1.ExecSQL;
+    end;
+
+    Result := nxDatabase1.Connected;
+  except
+    on E: Exception do
+    begin
+      GLastError := 'Failed to switch to alias "' + AAliasName + '": ' + E.Message;
+
+      // Attempt to rollback to previous alias
+      try
+        FAliasName := LOldAlias;
+        FTablePassword := LOldPassword;
+        nxDatabase1.AliasName := LOldAlias;
+        nxDatabase1.Open;
+
+        // Reapply previous password if needed
+        if (LOldPassword <> '') and nxDatabase1.Connected then
+        begin
+          nxQuery1.Close;
+          nxQuery1.SQL.Text := 'SET PASSWORDS ADD ''' + LOldPassword + '''';
+          nxQuery1.ExecSQL;
+        end;
+      except
+        on E2: Exception do
+          GLastError := GLastError + ' Rollback also failed: ' + E2.Message;
+      end;
+
+      raise Exception.Create(GLastError);
+    end;
+  end;
+end;
+
+function Tnxmodule.SwitchServer(const AServerHost: string; AServerPort: Integer;
+  const AAliasName: string; const ATablePassword: string): Boolean;
+var
+  LOldHost: string;
+  LOldPort: Integer;
+  LOldAlias: string;
+  LOldPassword: string;
+begin
+  Result := False;
+  GLastError := '';
+
+  if Trim(AServerHost) = '' then
+  begin
+    GLastError := 'Server host cannot be empty';
+    raise Exception.Create(GLastError);
+  end;
+
+  // Use current port if not specified
+  if AServerPort <= 0 then
+    AServerPort := FServerPort;
+
+  // Save current state for rollback
+  LOldHost := FServerHost;
+  LOldPort := FServerPort;
+  LOldAlias := FAliasName;
+  LOldPassword := FTablePassword;
+
+  try
+    // Close open datasets
+    if nxQuery1.Active then
+      nxQuery1.Close;
+    if nxTable1.Active then
+      nxTable1.Close;
+
+    // Release cached table handles
+    nxSession1.CloseInactiveTables;
+
+    // Full disconnect (database -> session -> engine -> transport)
+    Disconnect;
+
+    // Update server connection properties
+    FServerHost := AServerHost;
+    FServerPort := AServerPort;
+    nxWinsockTransport1.ServerName := AServerHost;
+    nxWinsockTransport1.Port := AServerPort;
+
+    // Update alias if provided
+    if AAliasName <> '' then
+    begin
+      FAliasName := AAliasName;
+      nxDatabase1.AliasName := AAliasName;
+    end;
+
+    // Update table password
+    FTablePassword := ATablePassword;
+
+    // Full reconnect (transport -> engine -> session -> database + password)
+    if not Connect then
+      raise Exception.Create(GLastError);
+
+    Result := nxDatabase1.Connected;
+  except
+    on E: Exception do
+    begin
+      GLastError := 'Failed to switch to server "' + AServerHost + ':' +
+                    IntToStr(AServerPort) + '": ' + E.Message;
+
+      // Attempt to rollback to previous server
+      try
+        FServerHost := LOldHost;
+        FServerPort := LOldPort;
+        FAliasName := LOldAlias;
+        FTablePassword := LOldPassword;
+        nxWinsockTransport1.ServerName := LOldHost;
+        nxWinsockTransport1.Port := LOldPort;
+        nxDatabase1.AliasName := LOldAlias;
+
+        Connect;
+      except
+        on E2: Exception do
+          GLastError := GLastError + ' Rollback also failed: ' + E2.Message;
+      end;
+
+      raise Exception.Create(GLastError);
+    end;
+  end;
 end;
 
 end.

@@ -30,6 +30,7 @@ object nxmodule: Tnxmodule
   end
   object nxWinsockTransport1: TnxWinsockTransport
     DisplayCategory = 'Transports'
+    MulticastGroup = 'ff02::4e58:4442'
     Left = 75
     Top = 33
   end

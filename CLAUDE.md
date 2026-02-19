@@ -86,6 +86,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `list_indexes` | List all indexes on a table with their fields |
 | `explain_query` | Show query execution plan (standard or verbose mode) |
 
+### Database Management (Phase 8)
+| Tool | Description |
+|------|-------------|
+| `list_aliases` | List available database aliases on the server |
+| `switch_database` | Switch to a different database alias (keeps session) |
+| `switch_server` | Switch to a different NexusDB server (full reconnect) |
+
 **batch_execute usage:**
 ```json
 {

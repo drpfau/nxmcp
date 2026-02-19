@@ -1,3 +1,5 @@
+// JCL_DEBUG_EXPERT_GENERATEJDBG OFF
+// JCL_DEBUG_EXPERT_INSERTJDBG OFF
 program nxmcp;
 
 {$APPTYPE CONSOLE}
@@ -6,8 +8,12 @@ program nxmcp;
 
 uses
   System.SysUtils,
+  System.SyncObjs,
+  Winapi.Windows,
   MCPServer.Types,
   MCPServer.IdHTTPServer,
+  MCPServer.StdioTransport,
+  MCPServer.Logger,
   MCPServer.Settings,
   MCPServer.ManagerRegistry,
   MCPServer.CoreManager,
@@ -47,59 +53,166 @@ uses
   // Phase 7 - Utility
   nxmcp.Tool.CountRecords in 'nxmcp.Tool.CountRecords.pas',
   nxmcp.Tool.ListIndexes in 'nxmcp.Tool.ListIndexes.pas',
-  nxmcp.Tool.ExplainQuery in 'nxmcp.Tool.ExplainQuery.pas';
+  nxmcp.Tool.ExplainQuery in 'nxmcp.Tool.ExplainQuery.pas',
+  // Phase 8 - Database Management
+  nxmcp.Tool.ListAliases in 'nxmcp.Tool.ListAliases.pas',
+  nxmcp.Tool.SwitchDatabase in 'nxmcp.Tool.SwitchDatabase.pas',
+  nxmcp.Tool.SwitchServer in 'nxmcp.Tool.SwitchServer.pas';
 
 var
   Server: TMCPIdHTTPServer;
   Settings: TMCPSettings;
   ManagerRegistry: IMCPManagerRegistry;
+  CoreManager: IMCPCapabilityManager;
+  ShutdownEvent: TEvent;
+
+function ConsoleCtrlHandler(dwCtrlType: DWORD): BOOL; stdcall;
+begin
+  Result := True;
+  case dwCtrlType of
+    CTRL_C_EVENT,
+    CTRL_BREAK_EVENT,
+    CTRL_CLOSE_EVENT,
+    CTRL_LOGOFF_EVENT,
+    CTRL_SHUTDOWN_EVENT:
+    begin
+      TLogger.Info('Shutdown signal received');
+      if Assigned(ShutdownEvent) then
+        ShutdownEvent.SetEvent;
+    end;
+  end;
+end;
+
+function HasStdioFlag: Boolean;
+var
+  I: Integer;
+  Param: string;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+  begin
+    Param := ParamStr(I).ToLower;
+    if (Param = '--stdio') or (Param = '-stdio') or (Param = '/stdio') then
+    begin
+      Result := True;
+      Break;
+    end;
+  end;
+end;
+
+procedure InitializeNexusDB;
+begin
+  TLogger.Info('Initializing NexusDB connection...');
+  nxmodule := Tnxmodule.Create(nil);
+
+  if nxmodule.IsConnected then
+    TLogger.Info('Connected to NexusDB: ' + nxmodule.AliasName +
+                 ' @ ' + nxmodule.ServerHost + ':' + IntToStr(nxmodule.ServerPort))
+  else
+  begin
+    TLogger.Warning('Not connected to NexusDB');
+    if nxmodule.GetLastError <> '' then
+      TLogger.Warning('  Error: ' + nxmodule.GetLastError);
+  end;
+end;
+
+procedure CreateManagerRegistry;
+begin
+  Settings := TMCPSettings.Create(nxmodule.GetConfigPath);
+  ManagerRegistry := TMCPManagerRegistry.Create;
+  CoreManager := TMCPCoreManager.Create(Settings);
+  ManagerRegistry.RegisterManager(CoreManager);
+  ManagerRegistry.RegisterManager(TMCPToolsManager.Create);
+  ManagerRegistry.RegisterManager(TMCPResourcesManager.Create);
+end;
+
+procedure RunHTTPServer;
+begin
+  TLogger.Info('nxmcp - NexusDB MCP Server');
+  TLogger.Info('==========================');
+  TLogger.Info('Transport: HTTP');
+
+  Server := TMCPIdHTTPServer.Create(nil);
+  try
+    Server.Settings := Settings;
+    Server.ManagerRegistry := ManagerRegistry;
+    Server.CoreManager := CoreManager;
+    Server.Start;
+
+    TLogger.Info('MCP Server running on http://' + Settings.Host + ':' +
+                 IntToStr(Settings.Port) + Settings.Endpoint);
+    TLogger.Info('Press CTRL+C to stop...');
+
+    ShutdownEvent.WaitFor(INFINITE);
+
+    TLogger.Info('Shutting down server...');
+    Server.Stop;
+    TLogger.Info('Server stopped successfully');
+  finally
+    Server.Free;
+  end;
+end;
+
+procedure RunStdioServer;
+var
+  StdioTransport: TMCPStdioTransport;
+begin
+  TLogger.Info('nxmcp - NexusDB MCP Server');
+  TLogger.Info('==========================');
+  TLogger.Info('Transport: STDIO');
+
+  StdioTransport := TMCPStdioTransport.Create(ManagerRegistry, CoreManager);
+  try
+    StdioTransport.Run;
+  finally
+    StdioTransport.Free;
+  end;
+end;
 
 begin
-  Writeln('nxmcp - NexusDB MCP Server');
-  Writeln('==========================');
-  Writeln;
+  // Detect STDIO mode before any output - stdout is reserved for JSON-RPC
+  if HasStdioFlag then
+    TLogger.UseStdErr := True;
 
-  // Initialize NexusDB datamodule
-  Writeln('Initializing NexusDB connection...');
-  nxmodule := Tnxmodule.Create(nil);
+  // Configure logger
+  TLogger.LogToConsole := True;
+  TLogger.MinLogLevel := TLogLevel.Info;
+
+  ReportMemoryLeaksOnShutdown := True;
+  IsMultiThread := True;
+
+  // Create shutdown event
+  ShutdownEvent := TEvent.Create(nil, True, False, '');
   try
-    if nxmodule.IsConnected then
-      Writeln('Connected to NexusDB: ', nxmodule.AliasName, ' @ ', nxmodule.ServerHost, ':', nxmodule.ServerPort)
-    else
-    begin
-      Writeln('WARNING: Not connected to NexusDB');
-      if nxmodule.GetLastError <> '' then
-        Writeln('  Error: ', nxmodule.GetLastError);
-    end;
-    Writeln;
+    // Set up Windows console signal handler
+    SetConsoleCtrlHandler(@ConsoleCtrlHandler, True);
 
-    // Initialize MCP server (uses unified config file)
-    Settings := TMCPSettings.Create(nxmodule.GetConfigPath);
     try
-      ManagerRegistry := TMCPManagerRegistry.Create;
-      ManagerRegistry.RegisterManager(TMCPCoreManager.Create(Settings));
-      ManagerRegistry.RegisterManager(TMCPToolsManager.Create);
-      ManagerRegistry.RegisterManager(TMCPResourcesManager.Create);
-
-      Server := TMCPIdHTTPServer.Create(nil);
+      // Initialize NexusDB (shared by both transport modes)
+      InitializeNexusDB;
       try
-        Server.Settings := Settings;
-        Server.ManagerRegistry := ManagerRegistry;
-        Server.Start;
-
-        Writeln('MCP Server running on http://', Settings.Host, ':', Settings.Port, Settings.Endpoint);
-        Writeln;
-        Writeln('Press ENTER to stop...');
-        Readln;
-
-        Server.Stop;
+        // Initialize MCP infrastructure (shared by both transport modes)
+        CreateManagerRegistry;
+        try
+          // Route to appropriate transport
+          if HasStdioFlag then
+            RunStdioServer
+          else
+            RunHTTPServer;
+        finally
+          Settings.Free;
+        end;
       finally
-        Server.Free;
+        nxmodule.Free;
       end;
-    finally
-      Settings.Free;
+    except
+      on E: Exception do
+        TLogger.Error(E);
     end;
+
+    // Remove signal handler
+    SetConsoleCtrlHandler(@ConsoleCtrlHandler, False);
   finally
-    nxmodule.Free;
+    ShutdownEvent.Free;
   end;
 end.

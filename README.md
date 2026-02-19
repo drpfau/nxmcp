@@ -4,9 +4,11 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 
 ## Features
 
+* **Dual Transport** - HTTP and STDIO (for Claude Desktop and other MCP clients)
 * **Query Execution** - Run SELECT queries and retrieve results as JSON
 * **Data Manipulation** - Insert, update, and delete records
 * **Schema Management** - Create tables, add columns, manage indexes
+* **Database Management** - Switch databases and servers at runtime, list aliases
 * **Discovery** - List tables, view schemas, get table structures, list indexes
 * **Utility** - Count records, show query execution plan
 
@@ -20,7 +22,7 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 
 ## Configuration
 
-On first run, `nxmcp.ini` is automatically created next to the executable with default values. Edit it to configure both the NexusDB connection and MCP server:
+On first run, an configurationfile `{programname}.ini` -default `nxmcp.ini` - is automatically created next to the executable with default values. Edit it to configure both the NexusDB connection and MCP server:
 
 ```ini
 [Connection]
@@ -32,7 +34,7 @@ ServerPort=16000
 [Database]
 ; Database alias as configured on the NXserver
 AliasName=YourAlias
-; Table password (leave empty if not used)
+; Table passwords, comma separated (leave empty if not used)
 TablePassword=
 
 [Authentication]
@@ -45,7 +47,7 @@ Password=your_password
 ; Automatically connect on startup (1=yes, 0=no)
 AutoConnect=1
 ; Connection timeout in milliseconds
-Timeout=30000
+Timeout=3000
 
 [Server]
 ; MCP server configuration
@@ -78,11 +80,21 @@ RootCertFile=
 
 ## Running
 
+### HTTP Transport (default)
+
 ```
 nxmcp.exe
 ```
 
 The server starts on `http://localhost:3000/mcp` by default.
+
+### STDIO Transport
+
+```
+nxmcp.exe --stdio
+```
+
+Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and other MCP clients that use the STDIO transport.
 
 ## Available Tools
 
@@ -141,6 +153,14 @@ The server starts on `http://localhost:3000/mcp` by default.
 | `count_records` | Fast record count via metadata | `tableName` |
 | `list_indexes` | List all indexes on a table | `tableName` |
 | `explain_query` | Show query execution plan | `sql` |
+
+### Database Management
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `list_aliases` | List available database aliases on the server | _(none)_ |
+| `switch_database` | Switch to a different database alias | `aliasName`, `tablePassword?` |
+| `switch_server` | Switch to a different NexusDB server | `serverHost`, `serverPort?`, `aliasName?`, `tablePassword?` |
 
 ## Available Resources
 
@@ -230,14 +250,30 @@ Example: `#T 10000 SELECT * FROM LargeTable WHERE Status = 'Active'`
 
 ## Integration with Claude Code
 
-Simply run 
+### HTTP Transport
 ```bash
- claude mcp add --transport http nxmcp http://localhost:3000/mcp
+claude mcp add --transport http nxmcp http://localhost:3000/mcp
+```
+
+### STDIO Transport
+```bash
+claude mcp add nxmcp -- /path/to/nxmcp.exe --stdio
 ```
 
 ## Integration with Claude Desktop
 
-Claude Desktop (currently?) does not support `localhost` URLs. You can try a proxy like `node mcp-remote`.
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "nxmcp": {
+      "command": "C:\\path\\to\\nxmcp.exe",
+      "args": ["--stdio"]
+    }
+  }
+}
+```
 
 
 ## License
