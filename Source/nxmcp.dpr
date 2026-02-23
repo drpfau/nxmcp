@@ -20,6 +20,7 @@ uses
   MCPServer.ToolsManager,
   MCPServer.ResourcesManager,
   dmnx in 'dmnx.pas' {nxmodule: TDataModule},
+  nxmcp.FieldTypes in 'nxmcp.FieldTypes.pas',
   nxmcp.Resource.Server in 'nxmcp.Resource.Server.pas',
   nxmcp.Resource.Tables in 'nxmcp.Resource.Tables.pas',
   nxmcp.Resource.Schema in 'nxmcp.Resource.Schema.pas',

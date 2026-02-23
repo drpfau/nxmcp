@@ -20,7 +20,7 @@ type
     [SchemaDescription('Name of the table to create')]
     property TableName: string read FTableName write FTableName;
 
-    [SchemaDescription('JSON array of column definitions, e.g. [{"name": "ID", "type": "AutoInc"}, {"name": "Name", "type": "ShortString", "size": 50}]. Supported types: AutoInc, ShortString, WideString, Integer, Int64, Word, Byte, Boolean, Float, Currency, DateTime, Date, Time, Blob, Memo')]
+    [SchemaDescription('JSON array of column definitions, e.g. [{"name": "ID", "type": "AutoInc"}, {"name": "Name", "type": "ShortString", "size": 50}]. Supported types: Boolean, Char, WideChar, Byte, Word, Word32, Int8, Int16, Integer, Int64, AutoInc, Single, Float, Extended, Currency, Date, Time, DateTime, Blob, Memo, Graphic, ByteArray, ShortString, NullString, WideString, RecRev, Guid, BCD, WideMemo, FmtBCD, RefNr')]
     property Columns: string read FColumns write FColumns;
   end;
 
@@ -41,31 +41,8 @@ uses
   nxsdTypes,
   nxsdDataDictionary,
   MCPServer.Registration,
-  dmnx;
-
-function StringToFieldType(const AType: string): TnxFieldType;
-var
-  LType: string;
-begin
-  LType := LowerCase(AType);
-  if LType = 'autoinc' then Result := nxtAutoInc
-  else if LType = 'shortstring' then Result := nxtShortString
-  else if LType = 'widestring' then Result := nxtWideString
-  else if LType = 'integer' then Result := nxtInt32
-  else if LType = 'int64' then Result := nxtInt64
-  else if LType = 'word' then Result := nxtWord16
-  else if LType = 'byte' then Result := nxtByte
-  else if LType = 'boolean' then Result := nxtBoolean
-  else if LType = 'float' then Result := nxtDouble
-  else if LType = 'currency' then Result := nxtCurrency
-  else if LType = 'datetime' then Result := nxtDateTime
-  else if LType = 'date' then Result := nxtDate
-  else if LType = 'time' then Result := nxtTime
-  else if LType = 'blob' then Result := nxtBlob
-  else if LType = 'memo' then Result := nxtBlobMemo
-  else
-    raise Exception.CreateFmt('Unknown field type: %s', [AType]);
-end;
+  dmnx,
+  nxmcp.FieldTypes;
 
 { TCreateTableTool }
 

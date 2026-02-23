@@ -28,7 +28,7 @@ type
     property ColumnName: string read FColumnName write FColumnName;
 
     [Optional]
-    [SchemaDescription('New column type (optional): AutoInc, ShortString, WideString, Integer, Int64, Word, Byte, Boolean, Float, Currency, DateTime, Date, Time, Blob, Memo')]
+    [SchemaDescription('New column type (optional): Boolean, Char, WideChar, Byte, Word, Word32, Int8, Int16, Integer, Int64, AutoInc, Single, Float, Extended, Currency, Date, Time, DateTime, Blob, Memo, Graphic, ByteArray, ShortString, NullString, WideString, RecRev, Guid, BCD, WideMemo, FmtBCD, RefNr')]
     property NewType: string read FNewType write FNewType;
 
     [Optional]
@@ -60,31 +60,8 @@ uses
   nxsdRecordMapperDescriptor,
   nxllException,
   MCPServer.Registration,
-  dmnx;
-
-function StringToFieldType(const AType: string): TnxFieldType;
-var
-  LType: string;
-begin
-  LType := LowerCase(AType);
-  if LType = 'autoinc' then Result := nxtAutoInc
-  else if LType = 'shortstring' then Result := nxtShortString
-  else if LType = 'widestring' then Result := nxtWideString
-  else if LType = 'integer' then Result := nxtInt32
-  else if LType = 'int64' then Result := nxtInt64
-  else if LType = 'word' then Result := nxtWord16
-  else if LType = 'byte' then Result := nxtByte
-  else if LType = 'boolean' then Result := nxtBoolean
-  else if LType = 'float' then Result := nxtDouble
-  else if LType = 'currency' then Result := nxtCurrency
-  else if LType = 'datetime' then Result := nxtDateTime
-  else if LType = 'date' then Result := nxtDate
-  else if LType = 'time' then Result := nxtTime
-  else if LType = 'blob' then Result := nxtBlob
-  else if LType = 'memo' then Result := nxtBlobMemo
-  else
-    raise Exception.CreateFmt('Unknown field type: %s', [AType]);
-end;
+  dmnx,
+  nxmcp.FieldTypes;
 
 { TModifyColumnTool }
 
@@ -161,6 +138,10 @@ begin
           LNewDict.FieldsDescriptor.FieldDescriptor[LFieldIdx].fdUnits := Params.NewSize;
           LChanges.Add('size=' + IntToStr(Params.NewSize));
         end;
+
+        // Recalculate offsets after any type or size mutation
+        if (Trim(Params.NewType) <> '') or (Params.NewSize > 0) then
+          LNewDict.FieldsDescriptor.UpdateSetupAndOffsets;
 
         // Apply rename
         if LIsRename then
