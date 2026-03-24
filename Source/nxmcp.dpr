@@ -1,5 +1,5 @@
-// JCL_DEBUG_EXPERT_GENERATEJDBG OFF
-// JCL_DEBUG_EXPERT_INSERTJDBG OFF
+// JCL_DEBUG_EXPERT_GENERATEJDBG ON
+// JCL_DEBUG_EXPERT_INSERTJDBG ON
 program nxmcp;
 
 {$APPTYPE CONSOLE}
@@ -7,6 +7,13 @@ program nxmcp;
 {$R *.res}
 
 uses
+  //not all NexusDB SKUs have all of these nx... files. Comment out if not found
+  nxReplacementMemoryManager,
+  nxExceptionHook,
+  nxExeConst,
+  nxPatchPPL,
+  nxPatchBetterTypeCast,
+
   System.SysUtils,
   System.SyncObjs,
   Winapi.Windows,
@@ -21,6 +28,7 @@ uses
   MCPServer.ResourcesManager,
   dmnx in 'dmnx.pas' {nxmodule: TDataModule},
   nxmcp.FieldTypes in 'nxmcp.FieldTypes.pas',
+  nxmcp.SqlUtils in 'nxmcp.SqlUtils.pas',
   nxmcp.Resource.Server in 'nxmcp.Resource.Server.pas',
   nxmcp.Resource.Tables in 'nxmcp.Resource.Tables.pas',
   nxmcp.Resource.Schema in 'nxmcp.Resource.Schema.pas',
@@ -58,7 +66,10 @@ uses
   // Phase 8 - Database Management
   nxmcp.Tool.ListAliases in 'nxmcp.Tool.ListAliases.pas',
   nxmcp.Tool.SwitchDatabase in 'nxmcp.Tool.SwitchDatabase.pas',
-  nxmcp.Tool.SwitchServer in 'nxmcp.Tool.SwitchServer.pas';
+  nxmcp.Tool.SwitchServer in 'nxmcp.Tool.SwitchServer.pas',
+  // Phase 9 - Configuration
+  nxmcp.Tool.SetTimeout in 'nxmcp.Tool.SetTimeout.pas',
+  nxmcp.Tool.GetQueryLog in 'nxmcp.Tool.GetQueryLog.pas';
 
 var
   Server: TMCPIdHTTPServer;

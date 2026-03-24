@@ -113,10 +113,10 @@
         </DelphiCompile>
         <DCCReference Include="dmnx.pas">
             <Form>nxmodule</Form>
-            <FormType>dfm</FormType>
             <DesignClass>TDataModule</DesignClass>
         </DCCReference>
         <DCCReference Include="nxmcp.FieldTypes.pas"/>
+        <DCCReference Include="nxmcp.SqlUtils.pas"/>
         <DCCReference Include="nxmcp.Resource.Server.pas"/>
         <DCCReference Include="nxmcp.Resource.Tables.pas"/>
         <DCCReference Include="nxmcp.Resource.Schema.pas"/>
@@ -149,6 +149,8 @@
         <DCCReference Include="nxmcp.Tool.ListAliases.pas"/>
         <DCCReference Include="nxmcp.Tool.SwitchDatabase.pas"/>
         <DCCReference Include="nxmcp.Tool.SwitchServer.pas"/>
+        <DCCReference Include="nxmcp.Tool.SetTimeout.pas"/>
+        <DCCReference Include="nxmcp.Tool.GetQueryLog.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

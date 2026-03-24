@@ -208,6 +208,7 @@ begin
 
   // Configure database
   nxDatabase1.AliasName := FAliasName;
+  nxDatabase1.Timeout := FTimeout;
 end;
 
 procedure Tnxmodule.ConfigureSerializer;

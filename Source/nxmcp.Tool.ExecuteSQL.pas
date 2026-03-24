@@ -15,9 +15,19 @@ type
   TExecuteSQLParams = class
   private
     FSql: string;
+    FLog: Boolean;
+    FVerboseLog: Boolean;
   public
     [SchemaDescription('SQL statement to execute (INSERT, UPDATE, DELETE, or other non-SELECT statements)')]
     property Sql: string read FSql write FSql;
+
+    [Optional]
+    [SchemaDescription('Enable query log (#L+) to capture execution plan summary in the response')]
+    property Log: Boolean read FLog write FLog;
+
+    [Optional]
+    [SchemaDescription('Enable verbose log (#V+) to capture full optimizer internals in the response')]
+    property VerboseLog: Boolean read FVerboseLog write FVerboseLog;
   end;
 
   /// <summary>
@@ -35,6 +45,7 @@ implementation
 uses
   Data.DB,
   MCPServer.Registration,
+  nxmcp.SqlUtils,
   dmnx;
 
 { TExecuteSQLTool }
@@ -54,13 +65,16 @@ var
   LResultObj: TJSONObject;
   LRowsAffected: Integer;
   LSqlUpper: string;
+  LSql: string;
+  LHasLog: Boolean;
 begin
   // Validate parameters
   if Trim(Params.Sql) = '' then
     raise Exception.Create('SQL statement cannot be empty');
 
   // Check for SELECT statements - those should use execute_query
-  LSqlUpper := Params.Sql.TrimLeft.ToUpper;
+  // Strip statement switches (#T, #I, #S, #L, #B, #V) before checking
+  LSqlUpper := StripSwitches(Params.Sql).ToUpper;
   if LSqlUpper.StartsWith('SELECT') then
     raise Exception.Create('SELECT queries are not allowed. Use execute_query for SELECT statements.');
 
@@ -68,10 +82,38 @@ begin
   if not Assigned(nxmodule) or not nxmodule.IsConnected then
     raise Exception.Create('Not connected to NexusDB');
 
+  // Prepend log switch if requested
+  LSql := Params.Sql;
+  LHasLog := Params.VerboseLog or Params.Log;
+  if Params.VerboseLog then
+    LSql := '#V+ ' + LSql
+  else if Params.Log then
+    LSql := '#L+ ' + LSql;
+
   // Execute SQL
   nxmodule.nxQuery1.Close;
-  nxmodule.nxQuery1.SQL.Text := Params.Sql;
-  nxmodule.nxQuery1.ExecSQL;
+  nxmodule.nxQuery1.SQL.Text := LSql;
+  try
+    nxmodule.nxQuery1.ExecSQL;
+  except
+    on E: Exception do
+    begin
+      // If log was requested, include it even on failure
+      if LHasLog and (nxmodule.nxQuery1.Log.Count > 0) then
+      begin
+        LResultObj := TJSONObject.Create;
+        try
+          LResultObj.AddPair('error', E.Message);
+          LResultObj.AddPair('log', LogToJSONArray(nxmodule.nxQuery1.Log));
+          Result := LResultObj.ToJSON;
+        finally
+          LResultObj.Free;
+        end;
+        Exit;
+      end;
+      raise;
+    end;
+  end;
   LRowsAffected := nxmodule.nxQuery1.RowsAffected;
 
   // Build result
@@ -80,6 +122,11 @@ begin
     LResultObj.AddPair('success', TJSONBool.Create(True));
     LResultObj.AddPair('rowsAffected', TJSONNumber.Create(LRowsAffected));
     LResultObj.AddPair('statement', Copy(LSqlUpper, 1, Pos(' ', LSqlUpper + ' ') - 1));
+
+    // Include log output if requested
+    if LHasLog then
+      LResultObj.AddPair('log', LogToJSONArray(nxmodule.nxQuery1.Log));
+
     Result := LResultObj.ToJSON;
   finally
     LResultObj.Free;
