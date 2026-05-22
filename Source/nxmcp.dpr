@@ -1,4 +1,4 @@
-// JCL_DEBUG_EXPERT_GENERATEJDBG ON
+﻿// JCL_DEBUG_EXPERT_GENERATEJDBG ON
 // JCL_DEBUG_EXPERT_INSERTJDBG ON
 program nxmcp;
 
@@ -50,6 +50,14 @@ uses
   nxmcp.Tool.ModifyColumn in 'nxmcp.Tool.ModifyColumn.pas',
   nxmcp.Tool.CreateIndex in 'nxmcp.Tool.CreateIndex.pas',
   nxmcp.Tool.DropIndex in 'nxmcp.Tool.DropIndex.pas',
+  // Phase 4b - Schema Metadata
+  nxmcp.Tool.SetTableDescription in 'nxmcp.Tool.SetTableDescription.pas',
+  nxmcp.Tool.SetColumnDescription in 'nxmcp.Tool.SetColumnDescription.pas',
+  nxmcp.Tool.SetIndexDescription in 'nxmcp.Tool.SetIndexDescription.pas',
+  nxmcp.Tool.SetFieldValidator in 'nxmcp.Tool.SetFieldValidator.pas',
+  nxmcp.Tool.SetColumnDefault in 'nxmcp.Tool.SetColumnDefault.pas',
+  nxmcp.Tool.SetDataPolicies in 'nxmcp.Tool.SetDataPolicies.pas',
+  nxmcp.Tool.SetAudit in 'nxmcp.Tool.SetAudit.pas',
   // Phase 5 - Table Maintenance
   nxmcp.Tool.EmptyTable in 'nxmcp.Tool.EmptyTable.pas',
   nxmcp.Tool.PackTable in 'nxmcp.Tool.PackTable.pas',

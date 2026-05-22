@@ -1,4 +1,4 @@
-unit nxmcp.Tool.ListIndexes;
+﻿unit nxmcp.Tool.ListIndexes;
 
 interface
 
@@ -40,6 +40,9 @@ uses
   nxllException,
   MCPServer.Registration,
   dmnx;
+
+type
+  TnxCrackIndexDescriptor = class(TnxIndexDescriptor);
 
 { TListIndexesTool }
 
@@ -94,6 +97,7 @@ begin
           LIndexObj.AddPair('unique', TJSONBool.Create(LIndex.Dups = idNone));
           LIndexObj.AddPair('isDefault', TJSONBool.Create(
             LDict.IndicesDescriptor.DefaultIndex = LIndex.Number));
+          LIndexObj.AddPair('description', TnxCrackIndexDescriptor(LIndex).idDesc);
 
           // Get fields for this index
           LFieldsArray := TJSONArray.Create;
