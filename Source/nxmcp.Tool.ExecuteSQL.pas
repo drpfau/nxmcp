@@ -78,8 +78,8 @@ begin
   if LSqlUpper.StartsWith('SELECT') then
     raise Exception.Create('SELECT queries are not allowed. Use execute_query for SELECT statements.');
 
-  // Check connection
-  if not Assigned(nxmodule) or not nxmodule.IsConnected then
+  // Check connection (transparently reconnects if dropped)
+  if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
     raise Exception.Create('Not connected to NexusDB');
 
   // Prepend log switch if requested
@@ -90,11 +90,15 @@ begin
   else if Params.Log then
     LSql := '#L+ ' + LSql;
 
-  // Execute SQL
-  nxmodule.nxQuery1.Close;
-  nxmodule.nxQuery1.SQL.Text := LSql;
+  // Execute SQL (auto-reconnects and retries once on lost connection)
   try
-    nxmodule.nxQuery1.ExecSQL;
+    nxmodule.ExecuteWithReconnect(
+      procedure
+      begin
+        nxmodule.nxQuery1.Close;
+        nxmodule.nxQuery1.SQL.Text := LSql;
+        nxmodule.nxQuery1.ExecSQL;
+      end);
   except
     on E: Exception do
     begin

@@ -78,7 +78,7 @@ begin
       raise Exception.Create('Data object cannot be empty');
 
     // Check connection
-    if not Assigned(nxmodule) or not nxmodule.IsConnected then
+    if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
       raise Exception.Create('Not connected to NexusDB');
 
     // Build INSERT SQL
@@ -114,10 +114,15 @@ begin
 
     LSql := 'INSERT INTO "' + Params.TableName + '" (' + LColumns + ') VALUES (' + LValues + ')';
 
-    // Execute
-    nxmodule.nxQuery1.Close;
-    nxmodule.nxQuery1.SQL.Text := LSql;
-    nxmodule.nxQuery1.ExecSQL;
+    // Execute (auto-reconnects and retries once on lost connection;
+    // note: retry on comm-lost after server commit can produce a duplicate row)
+    nxmodule.ExecuteWithReconnect(
+      procedure
+      begin
+        nxmodule.nxQuery1.Close;
+        nxmodule.nxQuery1.SQL.Text := LSql;
+        nxmodule.nxQuery1.ExecSQL;
+      end);
     LRowsAffected := nxmodule.nxQuery1.RowsAffected;
 
     // Build result

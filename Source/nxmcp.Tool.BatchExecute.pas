@@ -107,8 +107,10 @@ begin
     raise Exception.Create('Statements array cannot be empty');
   end;
 
-  // Check connection
-  if not Assigned(nxmodule) or not nxmodule.IsConnected then
+  // Check connection (transparently reconnects if dropped).
+  // Note: comm-lost AFTER the transaction starts is intentionally not retried —
+  // the existing rollback path below surfaces a clean error to the caller.
+  if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
   begin
     LStatementsArray.Free;
     raise Exception.Create('Not connected to NexusDB');

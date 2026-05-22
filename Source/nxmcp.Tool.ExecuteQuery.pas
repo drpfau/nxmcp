@@ -91,8 +91,8 @@ begin
   else
     LMaxRows := 100;
 
-  // Check connection
-  if not Assigned(nxmodule) or not nxmodule.IsConnected then
+  // Check connection (transparently reconnects if dropped)
+  if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
     raise Exception.Create('Not connected to NexusDB');
 
   // Prepend log switch if requested
@@ -103,11 +103,15 @@ begin
   else if Params.Log then
     LSql := '#L+ ' + LSql;
 
-  // Execute query
-  nxmodule.nxQuery1.Close;
-  nxmodule.nxQuery1.SQL.Text := LSql;
+  // Execute query (auto-reconnects and retries once on lost connection)
   try
-    nxmodule.nxQuery1.Open;
+    nxmodule.ExecuteWithReconnect(
+      procedure
+      begin
+        nxmodule.nxQuery1.Close;
+        nxmodule.nxQuery1.SQL.Text := LSql;
+        nxmodule.nxQuery1.Open;
+      end);
   except
     on E: Exception do
     begin

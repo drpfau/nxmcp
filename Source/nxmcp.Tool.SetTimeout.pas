@@ -59,7 +59,7 @@ begin
     raise Exception.Create('Timeout cannot be less than -1');
 
   // Check connection
-  if not Assigned(nxmodule) or not nxmodule.IsConnected then
+  if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
     raise Exception.Create('Not connected to NexusDB');
 
   // Get old value for reporting

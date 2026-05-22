@@ -6,7 +6,8 @@ uses
   System.SysUtils, System.Classes, System.IniFiles,
   nxsdServerEngine, nxreRemoteServerEngine, nxdb, Data.DB, nxllComponent,
   nxllTransport, nxptBasePooledTransport, nxthHttpTransport, nxtwWinsockTransport,
-  System.JSON, DataSet.Serialize, DataSet.Serialize.Config, System.Generics.Collections;
+  System.JSON, DataSet.Serialize, DataSet.Serialize.Config, System.Generics.Collections,
+  nxdbBase, nxllBde;
 
 type
   Tnxmodule = class(TDataModule)
@@ -40,7 +41,12 @@ type
   public
     function Connect: Boolean;
     procedure Disconnect;
+    procedure ForceDisconnect;
+    function Reconnect: Boolean;
+    function EnsureConnection: Boolean;
+    function ExecuteWithReconnect(const AAction: TProc): Boolean;
     function IsConnected: Boolean;
+    class function IsConnectionLostError(E: Exception): Boolean; static;
     function GetLastError: string;
     function GetConfigPath: string;
     function GetAliasNames: TStringList;
@@ -61,6 +67,9 @@ var
   nxmodule: Tnxmodule;
 
 implementation
+
+uses
+  MCPServer.Logger;
 
 {%CLASSGROUP 'System.Classes.TPersistent'}
 
@@ -297,6 +306,93 @@ end;
 function Tnxmodule.IsConnected: Boolean;
 begin
   Result := nxDatabase1.Connected;
+end;
+
+class function Tnxmodule.IsConnectionLostError(E: Exception): Boolean;
+begin
+  Result := (E is EnxDatabaseError) and
+            (EnxDatabaseError(E).ErrorCode = DBIERR_SERVERCOMMLOST);
+end;
+
+procedure Tnxmodule.ForceDisconnect;
+begin
+  // Hard teardown: ignore errors at every step so a half-broken state is fully cleared.
+  try
+    if nxQuery1.Active then
+      nxQuery1.Close;
+  except
+  end;
+  try
+    if nxTable1.Active then
+      nxTable1.Close;
+  except
+  end;
+  try
+    if nxDatabase1.Connected then
+      nxDatabase1.Close;
+  except
+  end;
+  try
+    if nxSession1.Active then
+      nxSession1.Close;
+  except
+  end;
+  try
+    if nxRemoteServerEngine1.Active then
+      nxRemoteServerEngine1.Active := False;
+  except
+  end;
+  try
+    if nxWinsockTransport1.Active then
+      nxWinsockTransport1.Active := False;
+  except
+  end;
+end;
+
+function Tnxmodule.Reconnect: Boolean;
+begin
+  TLogger.Info('Reconnecting to NexusDB...');
+  ForceDisconnect;
+  Result := Connect;
+  if Result then
+    TLogger.Info('Reconnected to NexusDB: ' + FAliasName +
+                 ' on ' + FServerHost + ':' + IntToStr(FServerPort))
+  else
+    TLogger.Warning('Reconnect to NexusDB failed: ' + GLastError);
+end;
+
+function Tnxmodule.EnsureConnection: Boolean;
+begin
+  if IsConnected then
+    Exit(True);
+  Result := Reconnect;
+end;
+
+function Tnxmodule.ExecuteWithReconnect(const AAction: TProc): Boolean;
+begin
+  Result := False;
+  try
+    AAction();
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      if IsConnectionLostError(E) then
+      begin
+        TLogger.Warning('Lost communication with NexusDB during operation; attempting reconnect.');
+        if Reconnect then
+        begin
+          // Retry once. Any exception from the second attempt bubbles up to caller.
+          AAction();
+          Result := True;
+        end
+        else
+          raise;
+      end
+      else
+        raise;
+    end;
+  end;
 end;
 
 function Tnxmodule.GetLastError: string;

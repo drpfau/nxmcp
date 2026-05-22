@@ -78,15 +78,19 @@ var
 begin
   Result := TSchemaOverviewData.Create;
   try
-    if Assigned(nxmodule) and nxmodule.IsConnected then
+    if Assigned(nxmodule) and nxmodule.EnsureConnection then
     begin
       Result.Connected := True;
       Result.DatabaseAlias := nxmodule.AliasName;
 
-      // Query tables
-      nxmodule.nxQuery1.Close;
-      nxmodule.nxQuery1.SQL.Text := 'SELECT * FROM #tables';
-      nxmodule.nxQuery1.Open;
+      // Query tables (auto-reconnects and retries once on lost connection)
+      nxmodule.ExecuteWithReconnect(
+        procedure
+        begin
+          nxmodule.nxQuery1.Close;
+          nxmodule.nxQuery1.SQL.Text := 'SELECT * FROM #tables';
+          nxmodule.nxQuery1.Open;
+        end);
       try
         // Find the tableName field
         LField := nil;

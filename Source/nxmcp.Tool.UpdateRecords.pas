@@ -84,7 +84,7 @@ begin
       raise Exception.Create('Data object cannot be empty');
 
     // Check connection
-    if not Assigned(nxmodule) or not nxmodule.IsConnected then
+    if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
       raise Exception.Create('Not connected to NexusDB');
 
     // Build SET clause
@@ -116,10 +116,15 @@ begin
 
     LSql := 'UPDATE "' + Params.TableName + '" SET ' + LSetClause + ' WHERE ' + Params.WhereClause;
 
-    // Execute
-    nxmodule.nxQuery1.Close;
-    nxmodule.nxQuery1.SQL.Text := LSql;
-    nxmodule.nxQuery1.ExecSQL;
+    // Execute (auto-reconnects and retries once on lost connection;
+    // UPDATE with the same WHERE clause is generally safe to repeat)
+    nxmodule.ExecuteWithReconnect(
+      procedure
+      begin
+        nxmodule.nxQuery1.Close;
+        nxmodule.nxQuery1.SQL.Text := LSql;
+        nxmodule.nxQuery1.ExecSQL;
+      end);
     LRowsAffected := nxmodule.nxQuery1.RowsAffected;
 
     // Build result

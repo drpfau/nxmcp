@@ -51,7 +51,7 @@ var
   I: Integer;
 begin
   // Check connection
-  if not Assigned(nxmodule) or not nxmodule.IsConnected then
+  if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
     raise Exception.Create('Not connected to NexusDB');
 
   LResultObj := TJSONObject.Create;

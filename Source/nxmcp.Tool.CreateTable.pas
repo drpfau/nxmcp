@@ -82,7 +82,7 @@ begin
       raise Exception.Create('At least one column is required');
 
     // Check connection
-    if not Assigned(nxmodule) or not nxmodule.IsConnected then
+    if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
       raise Exception.Create('Not connected to NexusDB');
 
     // Create data dictionary
@@ -115,8 +115,12 @@ begin
         LDict.FieldsDescriptor.AddField(LColName, '', LFieldType, LColSize, 0, False);
       end;
 
-      // Create the table
-      nxmodule.nxDatabase1.CreateTable(False, Params.TableName, '', LDict);
+      // Create the table (auto-reconnects and retries once on lost connection)
+      nxmodule.ExecuteWithReconnect(
+        procedure
+        begin
+          nxmodule.nxDatabase1.CreateTable(False, Params.TableName, '', LDict);
+        end);
 
       // Build result
       LResultObj := TJSONObject.Create;
