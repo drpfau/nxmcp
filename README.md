@@ -8,8 +8,9 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 * **Query Execution** - Run SELECT queries and retrieve results as JSON
 * **Data Manipulation** - Insert, update, and delete records
 * **Schema Management** - Create tables, add columns, manage indexes
+* **Schema Metadata** - Descriptions on tables/columns/indexes, field validators, defaults on existing columns, data policies, audit settings
 * **Database Management** - Switch databases and servers at runtime, list aliases
-* **Discovery** - List tables, view schemas, get table structures, list indexes
+* **Discovery** - List tables, view schemas, get table structures (including descriptions, defaults, validators, policies, audit, and referential-integrity references), list indexes
 * **Utility** - Count records, show query execution plan
 
 ## Requirements
@@ -22,7 +23,7 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 
 ## Configuration
 
-On first run, an configurationfile `{programname}.ini` -default `nxmcp.ini` - is automatically created next to the executable with default values. Edit it to configure both the NexusDB connection and MCP server:
+On first run, `nxmcp.ini` is automatically created next to the executable with default values. Edit it to configure both the NexusDB connection and MCP server:
 
 ```ini
 [Connection]
@@ -129,6 +130,20 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | `create_index` | Create an index | `tableName`, `indexName`, `columns`, `unique?` |
 | `drop_index` | Remove an index | `tableName`, `indexName` |
 
+### Schema Metadata
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `set_table_description` | Set or clear the description (comment) on a table | `tableName`, `description` |
+| `set_column_description` | Set or clear the description on a column | `tableName`, `columnName`, `description` |
+| `set_index_description` | Set or clear the description on an index | `tableName`, `indexName`, `description` |
+| `set_field_validator` | Add/remove a server-side validator on a column (`minmax` or `nochange`, or `none` to remove) | `tableName`, `columnName`, `validator`, `minValue?`, `maxValue?`, `minNull?`, `maxNull?` |
+| `set_column_default` | Add, replace, or clear the default-value descriptor on an existing column | `tableName`, `columnName`, `defaultType` (`none`/`CurrentDateTime`/`CurrentUser`/`Constant`), `constantValue?`, `applyAt?`, `applyOnInsert?`, `applyOnModify?`, `overwriteNonNull?` |
+| `set_data_policies` | Set/clear table-level data policies: deny insert/modify/delete and enforce min/max record counts | `tableName`, `clear?`, `denyInsert?`, `denyModify?`, `denyDelete?`, `minRecordCount?`, `maxRecordCount?` |
+| `set_audit` | Enable/disable audit-trail logging and BLOB inclusion (requires a server-side audit monitor for rows to be recorded) | `tableName`, `clear?`, `useAudit?`, `includeBlobFields?` |
+
+`get_table_schema` reads directly from the table's `TnxDataDictionary` and surfaces description, per-column descriptions/defaults/validators, per-index descriptions, data policies, audit settings, and (read-only) referential-integrity references. `list_indexes` also includes each index's description.
+
 ### Table Maintenance
 
 | Tool | Description | Parameters |
@@ -192,10 +207,12 @@ For `create_table` and `add_column`:
 
 ## Default Value Types
 
-For `add_column`:
+For `add_column` and `set_column_default`:
 
 * `CurrentDateTime` - Auto-populate with current timestamp
 * `CurrentUser` - Auto-populate with current user
+* `Constant` - Literal value (`set_column_default` only; pass via `constantValue`)
+* `none` - Remove any existing default (`set_column_default` only)
 
 ## Statement Switches
 
