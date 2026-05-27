@@ -64,6 +64,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `create_index` | Create index on column(s) |
 | `drop_index` | Remove an index |
 
+### Schema Metadata (Phase 4b)
+| Tool | Description |
+|------|-------------|
+| `set_table_description` | Set or clear the description (comment) on a table |
+| `set_column_description` | Set or clear the description on a column |
+| `set_index_description` | Set or clear the description on an index |
+| `set_field_validator` | Add/remove MinMax or NoChange server-side validator on a column |
+| `set_column_default` | Add/replace/clear default value on an existing column (CurrentDateTime, CurrentUser, Constant) |
+| `set_data_policies` | Set/clear table-level data policies: deny insert/modify/delete, min/max record count |
+| `set_audit` | Enable/disable audit-trail logging and BLOB inclusion for a table |
+
+`get_table_schema` reads the table dictionary directly and surfaces table description, column descriptions, defaults, validators, index descriptions, data policies, audit settings, and (read-only) referential-integrity references. `list_indexes` also includes each index's description.
+
 ### Table Maintenance (Phase 5)
 | Tool | Description |
 |------|-------------|
@@ -121,8 +134,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Supported types for create_table/add_column:
 `AutoInc`, `ShortString`, `WideString`, `Integer`, `Int64`, `Word`, `Byte`, `Boolean`, `Float`, `Currency`, `DateTime`, `Date`, `Time`, `Blob`, `Memo`
 
+### Column Options on create_table / add_column / modify_column
+`create_table` columns accept per-column `required` (NOT NULL), `description`, and a `default` object (`{type, constantValue?, applyAt?, applyOnInsert?, applyOnModify?, overwriteNonNull?}`); plus a table-level `description`. `add_column` accepts `required`, `description`, `defaultValueType` (incl. `Constant` via `constantValue`), `applyAt`, `applyOnModify`, `overwriteNonNull`. `modify_column` accepts `required` as a tri-state string (`"true"`/`"false"`/empty = unchanged). Shared logic lives in `nxmcp.ColumnSpec.pas` (`SetFieldDefault`, `ApplyColumnMetadataFromJSON`). NOTE: `fdRequired` is set directly, then reconciled with `FieldsDescriptor.UpdateSetupAndOffsets` (the EnterpriseManager restructure pattern).
+
 ### Default Value Types
-For add_column: `CurrentDateTime`, `CurrentUser`
+For add_column/create_table: `CurrentDateTime`, `CurrentUser`, `Constant`
 
 ### Statement Switches
 Prefix SQL with switches to control execution:

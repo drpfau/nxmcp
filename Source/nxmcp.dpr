@@ -28,6 +28,7 @@ uses
   MCPServer.ResourcesManager,
   dmnx in 'dmnx.pas' {nxmodule: TDataModule},
   nxmcp.FieldTypes in 'nxmcp.FieldTypes.pas',
+  nxmcp.ColumnSpec in 'nxmcp.ColumnSpec.pas',
   nxmcp.SqlUtils in 'nxmcp.SqlUtils.pas',
   nxmcp.Resource.Server in 'nxmcp.Resource.Server.pas',
   nxmcp.Resource.Tables in 'nxmcp.Resource.Tables.pas',

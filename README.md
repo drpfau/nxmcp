@@ -120,13 +120,13 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `create_table` | Create a new table | `tableName`, `columns` (JSON array) |
+| `create_table` | Create a new table | `tableName`, `columns` (JSON array), `description?` |
 | `drop_table` | Delete a table | `tableName` |
 | `copy_table` | Clone a table | `sourceTable`, `targetTable`, `copyData?` |
 | `rename_table` | Rename a table | `oldName`, `newName` |
-| `add_column` | Add a column | `tableName`, `columnName`, `columnType`, `size?`, `defaultValueType?` |
+| `add_column` | Add a column | `tableName`, `columnName`, `columnType`, `size?`, `required?`, `description?`, `defaultValueType?`, `constantValue?`, `applyAt?`, `applyOnModify?`, `overwriteNonNull?` |
 | `drop_column` | Remove a column | `tableName`, `columnName` |
-| `modify_column` | Modify a column | `tableName`, `columnName`, `newType?`, `newSize?`, `newName?` |
+| `modify_column` | Modify a column | `tableName`, `columnName`, `newType?`, `newSize?`, `newName?`, `required?` (`"true"`/`"false"`) |
 | `create_index` | Create an index | `tableName`, `indexName`, `columns`, `unique?` |
 | `drop_index` | Remove an index | `tableName`, `indexName` |
 
@@ -205,14 +205,32 @@ For `create_table` and `add_column`:
 * `Blob` - Binary data
 * `Memo` - Large text
 
+## Column Options (required, descriptions, defaults)
+
+`create_table`, `add_column`, and `modify_column` can declare column metadata directly — no separate call needed:
+
+* **Required / NOT NULL** — `create_table` (per-column `"required": true`), `add_column` (`required`), `modify_column` (`required: "true"`/`"false"`). Making an existing column required can fail if records already hold null values.
+* **AutoInc** — use the `AutoInc` column type.
+* **Descriptions** — per-column `description` in `create_table`/`add_column`; a table-level `description` in `create_table`.
+* **Default values** — see below.
+
+In `create_table`, each column object accepts an optional `default` object, e.g.:
+
+```json
+{ "name": "CreatedAt", "type": "DateTime",
+  "default": { "type": "CurrentDateTime", "applyOnInsert": true } }
+```
+
 ## Default Value Types
 
-For `add_column` and `set_column_default`:
+For `add_column`, `create_table` (per-column `default.type`), and `set_column_default`:
 
 * `CurrentDateTime` - Auto-populate with current timestamp
 * `CurrentUser` - Auto-populate with current user
-* `Constant` - Literal value (`set_column_default` only; pass via `constantValue`)
+* `Constant` - Literal value (pass via `constantValue`)
 * `none` - Remove any existing default (`set_column_default` only)
+
+Default behaviour can be tuned with `applyAt` (`client`/`server`/`both`), `applyOnInsert`, `applyOnModify`, and `overwriteNonNull`.
 
 ## Statement Switches
 
@@ -237,7 +255,8 @@ Example: `#T 10000 SELECT * FROM LargeTable WHERE Status = 'Active'`
   "name": "create_table",
   "arguments": {
     "tableName": "Customers",
-    "columns": "[{"name":"ID","type":"AutoInc"},{"name":"Name","type":"ShortString","size":100},{"name":"Email","type":"ShortString","size":255}]"
+    "description": "Customer master data",
+    "columns": "[{"name":"ID","type":"AutoInc"},{"name":"Name","type":"ShortString","size":100,"required":true,"description":"Display name"},{"name":"Email","type":"ShortString","size":255},{"name":"CreatedAt","type":"DateTime","default":{"type":"CurrentDateTime","applyOnInsert":true}}]"
   }
 }
 ```

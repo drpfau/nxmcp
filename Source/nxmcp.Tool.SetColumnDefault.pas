@@ -66,7 +66,8 @@ uses
   nxsdTableMapperDescriptor,
   nxllException,
   MCPServer.Registration,
-  dmnx;
+  dmnx,
+  nxmcp.ColumnSpec;
 
 { TSetColumnDefaultTool }
 
@@ -134,33 +135,8 @@ begin
       LFieldIdx := LNewDict.FieldsDescriptor.GetFieldFromName(Params.ColumnName);
       LField := LNewDict.FieldsDescriptor.FieldDescriptor[LFieldIdx];
 
-      // Always remove any existing default first to get a clean slate
-      if Assigned(LField.fdDefaultValue) then
-        LField.RemoveDefaultValue;
-
-      if not SameText(LMode, 'none') then
-      begin
-        if SameText(LMode, 'CurrentDateTime') then
-          LField.AddDefaultValue(TnxCurrentDateTimeDefaultValueDescriptor)
-        else if SameText(LMode, 'CurrentUser') then
-          LField.AddDefaultValue(TnxCurrentUserDefaultValueDescriptor)
-        else // Constant
-        begin
-          LField.AddDefaultValue(TnxConstDefaultValueDescriptor);
-          TnxConstDefaultValueDescriptor(LField.fdDefaultValue).AsVariant := Params.ConstantValue;
-        end;
-
-        if SameText(LApplyAt, 'client') then
-          LField.fdDefaultValue.ApplyAt := [aaClient]
-        else if SameText(LApplyAt, 'server') then
-          LField.fdDefaultValue.ApplyAt := [aaServer]
-        else
-          LField.fdDefaultValue.ApplyAt := [aaClient, aaServer];
-
-        LField.fdDefaultValue.ApplyOnInsert := Params.ApplyOnInsert;
-        LField.fdDefaultValue.ApplyOnModify := Params.ApplyOnModify;
-        LField.fdDefaultValue.OverwriteNonNull := Params.OverwriteNonNull;
-      end;
+      SetFieldDefault(LField, LMode, Params.ConstantValue, LApplyAt,
+        Params.ApplyOnInsert, Params.ApplyOnModify, Params.OverwriteNonNull);
 
       if LOldDict.IsEqual(LNewDict) then
       begin
