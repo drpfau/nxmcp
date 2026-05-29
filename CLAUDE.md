@@ -125,6 +125,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - RENAME TABLE: `ALTER TABLE "old" RENAME TO "new" RESTRICT`
 - System tables: `#TABLES`, `#FIELDS`, `#INDEXES` (column names have underscores like `TABLE_NAME`)
 
+### Typed-literal columns: GUID / Date / Time / DateTime (string literals rejected)
+NexusDB does **not** coerce a plain string literal (`'...'`) into a GUID, DATE, TIME or DATETIME column — assigning or comparing one raises `Type mismatch ... (column: X, [GUID/DATE/...])`. Each requires its typed literal, in a **fixed format** (parsed by `StringToGUID` and `nxsdDateTimeParser.pas`, which are strict about position/length):
+
+| Column type | Typed literal | Format notes |
+|---|---|---|
+| GUID | `GUID '{...}'` | **Braces required** (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`); stored/returned braced + uppercase |
+| Date | `DATE 'YYYY-MM-DD'` | exactly 10 chars |
+| Time | `TIME 'HH:MM:SS'` or `'HH:MM:SS.fff'` | len 8 or 12 |
+| DateTime | `TIMESTAMP 'YYYY-MM-DD HH:MM:SS[.fff]'` | **space** between date and time, **not** `T`; no timezone offset |
+
+```sql
+-- WRONG (type mismatch):  SET "DT" = '2024-01-15 13:45:00'   /  SET "DT" = TIMESTAMP '2024-01-15T13:45:00'
+-- RIGHT:                  SET "DT" = TIMESTAMP '2024-01-15 13:45:00'
+```
+Watch out for round-trips: `get_table_data`/`execute_query` return DateTime as ISO 8601 **with `T` and a local offset** (e.g. `2024-01-15T13:45:00.000+01:00`, per the `dataset.serialize` export config in `dmnx.pas`), which is **not** directly writable — the `T` and offset must be removed.
+
+`insert_record` / `update_records` handle all of this automatically: they read the table's column types (`nxmcp.ValueFormat.pas` → `GetTableFieldTypes`) and emit the correct typed literal, normalizing the incoming JSON string via `FormatJsonValueAsSql` (`NormalizeGuidLiteral` / `NormalizeDateLiteral` / `NormalizeTimeLiteral` / `NormalizeTimestampLiteral`). They accept lenient input — bare or braced GUIDs (any case), and dates/times with `T` or space separators and a trailing `Z`/offset (stripped, wall-clock preserved) — and reject genuinely invalid values with a clear client-side message. The **WHERE clause** of `update_records` and the raw `execute_sql`/`execute_query`/`batch_execute` SQL are passthrough — there you must write the typed literal yourself.
+
 ### Schema Operations
 - Use `TnxDataDictionary` for schema manipulation (faster than SQL)
 - Restructure via `database.RestructureTableEx()` with `TnxTableMapperDescriptor`

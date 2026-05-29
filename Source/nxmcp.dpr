@@ -30,6 +30,7 @@ uses
   nxmcp.FieldTypes in 'nxmcp.FieldTypes.pas',
   nxmcp.ColumnSpec in 'nxmcp.ColumnSpec.pas',
   nxmcp.SqlUtils in 'nxmcp.SqlUtils.pas',
+  nxmcp.ValueFormat in 'nxmcp.ValueFormat.pas',
   nxmcp.Resource.Server in 'nxmcp.Resource.Server.pas',
   nxmcp.Resource.Tables in 'nxmcp.Resource.Tables.pas',
   nxmcp.Resource.Schema in 'nxmcp.Resource.Schema.pas',

@@ -48,6 +48,7 @@ type
 implementation
 
 uses
+  System.Generics.Collections,
   Data.DB,
   DataSet.Serialize,
   MCPServer.Registration,
@@ -90,7 +91,6 @@ begin
     raise Exception.Create('Statements array cannot be empty');
 
   // Parse JSON array of statements
-  LStatementsArray := nil;
   try
     LStatementsArray := TJSONObject.ParseJSONValue(Params.Statements) as TJSONArray;
   except
@@ -122,14 +122,15 @@ begin
   LExecutedCount := 0;
   LTransactionStarted := False;
 
+  // Determine if logging is requested. Set before the try so the except handler
+  // (which runs even if StartTransaction itself fails) never reads it uninitialized.
+  LHasLog := Params.VerboseLog or Params.Log;
+
   try
     try
       // Start transaction
       nxmodule.nxDatabase1.StartTransaction(Params.Snapshot);
       LTransactionStarted := True;
-
-      // Determine if logging is requested
-      LHasLog := Params.VerboseLog or Params.Log;
 
       // Execute each statement
       for I := 0 to LStatementsArray.Count - 1 do

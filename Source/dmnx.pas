@@ -178,7 +178,7 @@ begin
     LIniFile.WriteInteger('Server', 'Port', 3000);
     LIniFile.WriteString('Server', 'Host', 'localhost');
     LIniFile.WriteString('Server', 'Name', 'nxmcp');
-    LIniFile.WriteString('Server', 'Version', '1.0.0');
+    LIniFile.WriteString('Server', 'Version', '3.1.0.0');
     LIniFile.WriteString('Server', 'Endpoint', '/mcp');
 
     // CORS section
@@ -244,7 +244,6 @@ end;
 
 function Tnxmodule.Connect: Boolean;
 begin
-  Result := False;
   GLastError := '';
 
   try
@@ -370,7 +369,6 @@ end;
 
 function Tnxmodule.ExecuteWithReconnect(const AAction: TProc): Boolean;
 begin
-  Result := False;
   try
     AAction();
     Result := True;
@@ -424,7 +422,6 @@ var
   LOldAlias: string;
   LOldPassword: string;
 begin
-  Result := False;
   GLastError := '';
 
   if Trim(AAliasName) = '' then
@@ -505,7 +502,6 @@ var
   LOldAlias: string;
   LOldPassword: string;
 begin
-  Result := False;
   GLastError := '';
 
   if Trim(AServerHost) = '' then

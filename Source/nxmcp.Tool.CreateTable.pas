@@ -49,6 +49,7 @@ type
 implementation
 
 uses
+  System.Generics.Collections,
   Data.DB,
   nxsdTypes,
   nxsdDataDictionary,

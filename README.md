@@ -55,7 +55,7 @@ Timeout=3000
 Port=3000
 Host=localhost
 Name=nxmcp
-Version=1.0.0
+Version=3.1.0.0
 Endpoint=/mcp
 
 [CORS]
