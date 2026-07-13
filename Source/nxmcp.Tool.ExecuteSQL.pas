@@ -15,11 +15,21 @@ type
   TExecuteSQLParams = class
   private
     FSql: string;
+    FParams: string;
     FLog: Boolean;
     FVerboseLog: Boolean;
   public
-    [SchemaDescription('SQL statement to execute (INSERT, UPDATE, DELETE, or other non-SELECT statements)')]
+    [SchemaDescription('SQL statement to execute (INSERT, UPDATE, DELETE, or other non-SELECT statements). ' +
+      'May contain :name parameter placeholders bound via params.')]
     property Sql: string read FSql write FSql;
+
+    [Optional]
+    [SchemaDescription('JSON array binding values to :name placeholders in the SQL, e.g. ' +
+      '[{"name":"id","value":42},{"name":"since","value":"2024-01-15","type":"date"}]. ' +
+      '"type" is optional (inferred from the JSON value: number, boolean, string); explicit types: ' +
+      'string, memo, integer, float, currency, boolean, date, time, datetime, guid, blob (base64). ' +
+      '"value":null binds NULL. Values are bound natively - no quoting or GUID/DATE/TIMESTAMP typed literals needed.')]
+    property Params: string read FParams write FParams;
 
     [Optional]
     [SchemaDescription('Enable query log (#L+) to capture execution plan summary in the response')]
@@ -46,6 +56,7 @@ uses
   Data.DB,
   MCPServer.Registration,
   nxmcp.SqlUtils,
+  nxmcp.QueryParams,
   dmnx;
 
 { TExecuteSQLTool }
@@ -57,6 +68,8 @@ begin
   FTitle := 'Execute SQL Statement';
   FDescription := 'Execute a SQL statement (INSERT, UPDATE, DELETE) against the NexusDB database. ' +
                   'Returns the number of rows affected. For SELECT queries, use execute_query instead. ' +
+                  'Supports named parameters: write :name placeholders in the SQL and supply values via params ' +
+                  '(preferred over embedding values in the SQL - no escaping or typed-literal syntax needed). ' +
                   'Statement switches can be prefixed: #T ms (timeout). Example: "#T 10000 DELETE FROM large_table WHERE old = 1"';
 end;
 
@@ -96,7 +109,12 @@ begin
       procedure
       begin
         nxmodule.nxQuery1.Close;
+        // Drop bindings left over from a previous statement: setting SQL.Text
+        // carries old values onto same-named params (TParams.AssignValues),
+        // which would defeat the missing-parameter check below.
+        nxmodule.nxQuery1.Params.Clear;
         nxmodule.nxQuery1.SQL.Text := LSql;
+        ApplyJsonParamsToQuery(nxmodule.nxQuery1, Params.Params);
         nxmodule.nxQuery1.ExecSQL;
       end);
   except

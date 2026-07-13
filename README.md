@@ -9,7 +9,7 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 * **Data Manipulation** - Insert, update, and delete records
 * **Schema Management** - Create tables, add columns, manage indexes
 * **Schema Metadata** - Descriptions on tables/columns/indexes, field validators, defaults on existing columns, data policies, audit settings
-* **Database Management** - Switch databases and servers at runtime, list aliases
+* **Database Management** - Switch databases and servers at runtime (remote or in-process embedded server), list aliases
 * **Discovery** - List tables, view schemas, get table structures (including descriptions, defaults, validators, policies, audit, and referential-integrity references), list indexes
 * **Utility** - Count records, show query execution plan
 
@@ -27,14 +27,21 @@ On first run, `nxmcp.ini` is automatically created next to the executable with d
 
 ```ini
 [Connection]
-; NXserver host address
+; Server mode: Remote (connect to an NXserver) or Embedded (in-process local server)
+; In Embedded mode only [Database] AliasPath is used (no AliasName), and it must be set.
+Mode=Remote
+; NXserver host address (Remote mode only)
 ServerHost=localhost
-; NXserver port (default: 16000)
+; NXserver port (default: 16000, Remote mode only)
 ServerPort=16000
 
 [Database]
+; Set EITHER AliasName OR AliasPath (they are mutually exclusive; Embedded uses AliasPath only).
+; If both are set, AliasPath takes precedence.
 ; Database alias as configured on the NXserver
 AliasName=YourAlias
+; Server-side filesystem path to the database folder (leave empty to use AliasName)
+AliasPath=
 ; Table passwords, comma separated (leave empty if not used)
 TablePassword=
 ; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead
@@ -50,6 +57,10 @@ Password=your_password
 AutoConnect=1
 ; Connection timeout in milliseconds
 Timeout=3000
+; Write log output to a file (1=yes, 0=no)
+LogToFile=0
+; Log file path (leave empty for <exe name>.log next to the executable)
+LogFileName=
 
 [Server]
 ; MCP server configuration
@@ -104,7 +115,7 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `execute_query` | Run SELECT queries | `sql` |
+| `execute_query` | Run SELECT queries | `sql`, `params?`, `maxRows?` |
 | `get_table_schema` | Get table structure | `tableName` |
 
 ### Data Manipulation
@@ -115,7 +126,7 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | `insert_record` | Insert a new record | `tableName`, `data` (JSON string) |
 | `update_records` | Update matching records | `tableName`, `data` (JSON string), `whereClause` |
 | `delete_records` | Delete matching records | `tableName`, `whereClause` |
-| `execute_sql` | Run INSERT/UPDATE/DELETE | `sql` |
+| `execute_sql` | Run INSERT/UPDATE/DELETE | `sql`, `params?` |
 
 ### Schema Management
 
@@ -175,8 +186,8 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `list_aliases` | List available database aliases on the server | _(none)_ |
-| `switch_database` | Switch to a different database alias | `aliasName`, `tablePassword?` |
-| `switch_server` | Switch to a different NexusDB server | `serverHost`, `serverPort?`, `aliasName?`, `tablePassword?` |
+| `switch_database` | Switch to a different database alias or server-side path | `aliasName?`, `aliasPath?`, `tablePassword?` (provide either `aliasName` or `aliasPath`) |
+| `switch_server` | Switch server connection (remote or embedded) | `mode?` (remote/embedded), `serverHost?`, `serverPort?`, `aliasName?`, `aliasPath?`, `tablePassword?` (embedded requires `aliasPath`) |
 
 ## Available Resources
 
@@ -284,6 +295,30 @@ Example: `#T 10000 SELECT * FROM LargeTable WHERE Status = 'Active'`
   }
 }
 ```
+
+### Parameterized queries
+
+`execute_query` and `execute_sql` support named parameters: write `:name` placeholders
+in the SQL and bind values through the optional `params` argument (a JSON array).
+Values are bound natively — no quoting/escaping, and no `GUID '...'` / `TIMESTAMP '...'`
+typed-literal syntax is needed for GUID, date, time, or datetime columns.
+
+```json
+{
+  "name": "execute_query",
+  "arguments": {
+    "sql": "SELECT * FROM Orders WHERE CustomerGuid = :cust AND OrderDate >= :since AND Total > :min",
+    "params": "[{"name":"cust","value":"d94660ff-6da8-4d0b-8358-12dacb46ccf9","type":"guid"},{"name":"since","value":"2024-01-15","type":"date"},{"name":"min","value":100}]"
+  }
+}
+```
+
+Each entry is `{"name", "value", "type"?}`. `type` is optional and inferred from the
+JSON value (number → integer/float, true/false → boolean, string → string); explicit
+types: `string`, `memo`, `integer`, `float`, `currency`, `boolean`, `date`, `time`,
+`datetime`, `guid`, `blob` (base64). `"value": null` binds a NULL. Date/time values
+accept ISO 8601 input (`T` or space separator; a trailing `Z`/offset is stripped,
+wall-clock preserved); GUIDs may be bare or braced, any case.
 
 ## Integration with Claude Code
 
