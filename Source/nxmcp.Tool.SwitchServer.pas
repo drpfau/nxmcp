@@ -75,10 +75,14 @@ begin
   FTitle := 'Switch Server';
   FDescription := 'Switch the NexusDB server connection. mode="remote" (default) connects to ' +
                   'an NXserver; mode="embedded" runs an in-process local NexusDB server. ' +
-                  'Fully disconnects and reconnects, deactivating the components not in use. ' +
+                  'Changing mode fully disconnects and reconnects, deactivating the components ' +
+                  'not in use; an embedded-to-embedded switch only changes the database folder ' +
+                  'and keeps the engine and session up. ' +
                   'In remote mode optionally specify the database as EITHER aliasName (a ' +
                   'server-configured alias) OR aliasPath (a server-side filesystem path). ' +
-                  'In embedded mode aliasPath is required (there are no aliases in embedded mode). ' +
+                  'In embedded mode aliasPath is required (there are no aliases in embedded ' +
+                  'mode) and must be an existing directory - a bad path is rejected up front ' +
+                  'and the current connection is left untouched. ' +
                   'If switching fails, the server attempts to reconnect to the previous connection.';
 end;
 

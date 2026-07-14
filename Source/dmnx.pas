@@ -118,6 +118,11 @@ uses
   // nxseAllEngines registers the pluggable storage/index/record sub-engines that a
   // local (embedded) TnxServerEngine needs to open tables. Required for embedded mode.
   nxseAllEngines,
+  // nxllException exposes _FatalException: once the engine hits a critical error
+  // (e.g. an access violation inside engine code) this process-wide flag is set,
+  // every engine call fails with rsFatalError, and nothing resets it short of a
+  // process restart. We surface that state in our error messages.
+  nxllException,
   nxmcp.FileLog,
   MCPServer.Logger;
 
@@ -127,6 +132,22 @@ uses
 
 var
   GLastError: string;
+
+/// <summary>
+/// Append a restart hint when the in-process engine is in the unrecoverable
+/// fatal state. The library's own rsFatalError text says "until the server is
+/// restarted", which for embedded mode means this very process - spell that out
+/// so an MCP client (or the AI driving it) knows reconnecting cannot help.
+/// </summary>
+function WithFatalHint(const AMessage: string): string;
+const
+  cHint = ' [the in-process NexusDB engine reported a fatal error and is ' +
+          'suspended; nxmcp.exe must be restarted to recover]';
+begin
+  Result := AMessage;
+  if _FatalException and (Pos(cHint, Result) = 0) then
+    Result := Result + cHint;
+end;
 
 procedure Tnxmodule.DataModuleCreate(Sender: TObject);
 begin
@@ -480,7 +501,7 @@ begin
   except
     on E: Exception do
     begin
-      GLastError := E.Message;
+      GLastError := WithFatalHint(E.Message);
       Result := False;
     end;
   end;
@@ -523,6 +544,12 @@ begin
   if Trim(FAliasPath) = '' then
     raise Exception.Create(
       'Embedded mode requires an AliasPath (there are no aliases in embedded mode)');
+
+  // The embedded engine opens a directory in this process, so validate the path
+  // client-side before touching any component state. This also guards startup
+  // with a bad ini path and the switch rollback paths, which reuse Connect.
+  if not DirectoryExists(FAliasPath) then
+    raise Exception.Create('Embedded database path does not exist: ' + FAliasPath);
 
   // Embedded mode uses the in-process engine; the remote transport/engine stay off.
   if nxRemoteServerEngine1.Active then
@@ -685,7 +712,7 @@ begin
   except
     on E: Exception do
     begin
-      GLastError := E.Message;
+      GLastError := WithFatalHint(E.Message);
       TLogger.Warning('Failed to re-establish NexusDB session: ' + GLastError);
       Result := False;
     end;
@@ -849,6 +876,17 @@ begin
     raise Exception.Create(GLastError);
   end;
 
+  // In embedded mode the alias path is a directory local to this process, so a
+  // bad target can be rejected before anything is closed - the current
+  // connection stays fully intact. (In remote mode the path is server-side and
+  // only the server can judge it.)
+  if (FServerMode = smEmbedded) and (AAliasPath <> '') and
+     not DirectoryExists(AAliasPath) then
+  begin
+    GLastError := 'Embedded database path does not exist: ' + AAliasPath;
+    raise Exception.Create(GLastError);
+  end;
+
   if AAliasPath <> '' then
     LTargetDesc := 'path "' + AAliasPath + '"'
   else
@@ -915,7 +953,7 @@ begin
           LFailure := LFailure + ' Rollback also failed: ' + E2.Message;
       end;
 
-      GLastError := LFailure;
+      GLastError := WithFatalHint(LFailure);
       raise Exception.Create(GLastError);
     end;
   end;
@@ -1065,7 +1103,7 @@ begin
           LFailure := LFailure + ' Rollback also failed: ' + E2.Message;
       end;
 
-      GLastError := LFailure;
+      GLastError := WithFatalHint(LFailure);
       raise Exception.Create(GLastError);
     end;
   end;
@@ -1090,6 +1128,26 @@ begin
   begin
     GLastError := 'Embedded mode requires an alias path';
     raise Exception.Create(GLastError);
+  end;
+
+  // The embedded engine opens a directory in this process: a bad target can be
+  // rejected up front, before anything is torn down, leaving the current
+  // connection untouched (no rollback needed).
+  if not DirectoryExists(AAliasPath) then
+  begin
+    GLastError := 'Embedded database path does not exist: ' + AAliasPath;
+    raise Exception.Create(GLastError);
+  end;
+
+  // Already embedded: only the database target changes, so switch at the
+  // database level and keep the engine and session up. A full engine bounce is
+  // reserved for actual mode changes - deactivating and reactivating the
+  // in-process engine is a far bigger hammer, and older engine builds have
+  // crashed doing it, wedging the whole process (see CLAUDE.md).
+  if FServerMode = smEmbedded then
+  begin
+    Result := SwitchDatabaseTarget('', AAliasPath, ATablePassword);
+    Exit;
   end;
 
   // Save current state for rollback

@@ -61,8 +61,10 @@ begin
                   'Provide EITHER aliasName (a server-configured alias) OR aliasPath ' +
                   '(a server-side filesystem path to the database folder) - the two are ' +
                   'mutually exclusive. The transport and session remain connected; only the ' +
-                  'database is changed. If switching fails, the server attempts to reconnect ' +
-                  'to the previous database. Use list_aliases to see available aliases.';
+                  'database is changed. In embedded mode only aliasPath is valid and it must ' +
+                  'be an existing directory - a bad path is rejected up front and the current ' +
+                  'connection is left untouched. If switching fails, the server attempts to ' +
+                  'reconnect to the previous database. Use list_aliases to see available aliases.';
 end;
 
 function TSwitchDatabaseTool.ExecuteWithParams(const Params: TSwitchDatabaseParams): string;
