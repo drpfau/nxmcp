@@ -29,6 +29,8 @@ type
     FDefaultServerHost: string;
     FDefaultServerPort: Integer;
     FTablePassword: string;
+    FTablePasswordIsCommaList: Boolean;
+    FExtraTablePasswords: TArray<string>;
     FUsername: string;
     FPassword: string;
     FAutoConnect: Boolean;
@@ -38,6 +40,8 @@ type
     procedure CreateDefaultConfig;
     procedure ConfigureComponents;
     procedure ConfigureSerializer;
+    procedure AddSessionPassword(const APassword: string);
+    procedure ApplyPassword(const APassword: string; AIsCommaList: Boolean);
   public
     function Connect: Boolean;
     procedure Disconnect;
@@ -97,12 +101,16 @@ end;
 procedure Tnxmodule.LoadConfig;
 var
   LIniFile: TMemIniFile;
+  LIndex: Integer;
+  LKey: string;
 begin
   // Default values
   FServerHost := 'localhost';
   FServerPort := 16000;
   FAliasName := '';
   FTablePassword := '';
+  FTablePasswordIsCommaList := True;
+  FExtraTablePasswords := nil;
   FUsername := 'Administrator';
   FPassword := 'NexusDB';
   FAutoConnect := True;
@@ -127,6 +135,17 @@ begin
     FAliasName := LIniFile.ReadString('Database', 'AliasName', FAliasName);
     FDefaultAliasName := FAliasName;
     FTablePassword := LIniFile.ReadString('Database', 'TablePassword', FTablePassword);
+
+    // TablePasswords1, TablePasswords2, ... - one password per key, taken verbatim
+    // (unlike TablePassword, not comma-split), for passwords that contain a literal comma.
+    LIndex := 1;
+    LKey := 'TablePasswords' + IntToStr(LIndex);
+    while LIniFile.ValueExists('Database', LKey) do
+    begin
+      FExtraTablePasswords := FExtraTablePasswords + [LIniFile.ReadString('Database', LKey, '')];
+      Inc(LIndex);
+      LKey := 'TablePasswords' + IntToStr(LIndex);
+    end;
 
     // Authentication section
     FUsername := LIniFile.ReadString('Authentication', 'Username', FUsername);
@@ -160,6 +179,7 @@ begin
     LIniFile.WriteString('Database', 'AliasName', 'YourAlias');
     LIniFile.WriteString('Database', '; Table passwords, comma separated (leave empty if not used)', '');
     LIniFile.WriteString('Database', 'TablePassword', '');
+    LIniFile.WriteString('Database', '; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead', '');
 
     // Authentication section
     LIniFile.WriteString('Authentication', '; NexusDB username', '');
@@ -242,7 +262,38 @@ begin
   end;
 end;
 
+procedure Tnxmodule.AddSessionPassword(const APassword: string);
+begin
+  if APassword <> '' then
+    // Native session call: no SQL string literal involved, so no escaping is needed.
+    // Used exactly as given - no trimming, since a real password may have significant
+    // leading/trailing whitespace.
+    nxSession1.PasswordAdd(APassword);
+end;
+
+procedure Tnxmodule.ApplyPassword(const APassword: string; AIsCommaList: Boolean);
+var
+  LRawPassword: string;
+begin
+  if APassword = '' then
+    Exit;
+
+  if AIsCommaList then
+  begin
+    // Legacy TablePassword INI format: comma-separated list of passwords in one string.
+    // Whitespace around each item is incidental formatting, so it is trimmed here only.
+    for LRawPassword in APassword.Split([',']) do
+      AddSessionPassword(Trim(LRawPassword));
+  end
+  else
+    // Runtime-supplied password (tool call, or persisted from one): a single atomic value,
+    // never split on comma, since a real password may legitimately contain one.
+    AddSessionPassword(APassword);
+end;
+
 function Tnxmodule.Connect: Boolean;
+var
+  LExtraPassword: string;
 begin
   GLastError := '';
 
@@ -263,12 +314,12 @@ begin
     if not nxDatabase1.Connected then
       nxDatabase1.Open;
 
-    // Set table password if configured
-    if (FTablePassword <> '') and nxDatabase1.Connected then
+    // Set table password(s) if configured
+    if nxDatabase1.Connected then
     begin
-      nxQuery1.Close;
-      nxQuery1.SQL.Text := 'SET PASSWORDS ADD ''' + FTablePassword + '''';
-      nxQuery1.ExecSQL;
+      ApplyPassword(FTablePassword, FTablePasswordIsCommaList);
+      for LExtraPassword in FExtraTablePasswords do
+        AddSessionPassword(LExtraPassword);
     end;
 
     Result := nxDatabase1.Connected;
@@ -421,6 +472,7 @@ function Tnxmodule.SwitchDatabase(const AAliasName: string;
 var
   LOldAlias: string;
   LOldPassword: string;
+  LOldPasswordIsCommaList: Boolean;
 begin
   GLastError := '';
 
@@ -433,6 +485,7 @@ begin
   // Save current state for rollback
   LOldAlias := FAliasName;
   LOldPassword := FTablePassword;
+  LOldPasswordIsCommaList := FTablePasswordIsCommaList;
 
   try
     // Close open datasets that depend on the database
@@ -448,21 +501,19 @@ begin
     if nxDatabase1.Connected then
       nxDatabase1.Close;
 
-    // Switch to new alias
+    // Switch to new alias. A tool-supplied password is a single atomic value,
+    // never split on comma, since a real password may legitimately contain one.
     FAliasName := AAliasName;
     FTablePassword := ATablePassword;
+    FTablePasswordIsCommaList := False;
     nxDatabase1.AliasName := AAliasName;
 
     // Reopen the database
     nxDatabase1.Open;
 
     // Apply table password if provided
-    if (ATablePassword <> '') and nxDatabase1.Connected then
-    begin
-      nxQuery1.Close;
-      nxQuery1.SQL.Text := 'SET PASSWORDS ADD ''' + ATablePassword + '''';
-      nxQuery1.ExecSQL;
-    end;
+    if nxDatabase1.Connected then
+      AddSessionPassword(ATablePassword);
 
     Result := nxDatabase1.Connected;
   except
@@ -474,16 +525,13 @@ begin
       try
         FAliasName := LOldAlias;
         FTablePassword := LOldPassword;
+        FTablePasswordIsCommaList := LOldPasswordIsCommaList;
         nxDatabase1.AliasName := LOldAlias;
         nxDatabase1.Open;
 
-        // Reapply previous password if needed
-        if (LOldPassword <> '') and nxDatabase1.Connected then
-        begin
-          nxQuery1.Close;
-          nxQuery1.SQL.Text := 'SET PASSWORDS ADD ''' + LOldPassword + '''';
-          nxQuery1.ExecSQL;
-        end;
+        // Reapply previous password(s) if needed
+        if nxDatabase1.Connected then
+          ApplyPassword(LOldPassword, LOldPasswordIsCommaList);
       except
         on E2: Exception do
           GLastError := GLastError + ' Rollback also failed: ' + E2.Message;
@@ -501,6 +549,8 @@ var
   LOldPort: Integer;
   LOldAlias: string;
   LOldPassword: string;
+  LOldPasswordIsCommaList: Boolean;
+  LOldExtraPasswords: TArray<string>;
 begin
   GLastError := '';
 
@@ -519,6 +569,8 @@ begin
   LOldPort := FServerPort;
   LOldAlias := FAliasName;
   LOldPassword := FTablePassword;
+  LOldPasswordIsCommaList := FTablePasswordIsCommaList;
+  LOldExtraPasswords := FExtraTablePasswords;
 
   try
     // Close open datasets
@@ -546,8 +598,12 @@ begin
       nxDatabase1.AliasName := AAliasName;
     end;
 
-    // Update table password
+    // Update table password. A tool-supplied password is a single atomic value, never split
+    // on comma. The locally-configured extra passwords are not carried over to a different
+    // server unless explicitly supplied here, same as the legacy TablePassword above.
     FTablePassword := ATablePassword;
+    FTablePasswordIsCommaList := False;
+    FExtraTablePasswords := nil;
 
     // Full reconnect (transport -> engine -> session -> database + password)
     if not Connect then
@@ -566,6 +622,8 @@ begin
         FServerPort := LOldPort;
         FAliasName := LOldAlias;
         FTablePassword := LOldPassword;
+        FTablePasswordIsCommaList := LOldPasswordIsCommaList;
+        FExtraTablePasswords := LOldExtraPasswords;
         nxWinsockTransport1.ServerName := LOldHost;
         nxWinsockTransport1.Port := LOldPort;
         nxDatabase1.AliasName := LOldAlias;

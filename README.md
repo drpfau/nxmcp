@@ -37,6 +37,7 @@ ServerPort=16000
 AliasName=YourAlias
 ; Table passwords, comma separated (leave empty if not used)
 TablePassword=
+; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead
 
 [Authentication]
 ; NexusDB username
