@@ -81,7 +81,11 @@ begin
     if Assigned(nxmodule) and nxmodule.EnsureConnection then
     begin
       Result.Connected := True;
-      Result.DatabaseAlias := nxmodule.AliasName;
+      // Show the alias name, or the server-side path when connected by path.
+      if nxmodule.AliasName <> '' then
+        Result.DatabaseAlias := nxmodule.AliasName
+      else
+        Result.DatabaseAlias := nxmodule.AliasPath;
 
       // Query tables (auto-reconnects and retries once on lost connection)
       nxmodule.ExecuteWithReconnect(
