@@ -308,7 +308,7 @@ typed-literal syntax is needed for GUID, date, time, or datetime columns.
   "name": "execute_query",
   "arguments": {
     "sql": "SELECT * FROM Orders WHERE CustomerGuid = :cust AND OrderDate >= :since AND Total > :min",
-    "params": "[{"name":"cust","value":"d94660ff-6da8-4d0b-8358-12dacb46ccf9","type":"guid"},{"name":"since","value":"2024-01-15","type":"date"},{"name":"min","value":100}]"
+    "params": "[{\"name\":\"cust\",\"value\":\"d94660ff-6da8-4d0b-8358-12dacb46ccf9\",\"type\":\"guid\"},{\"name\":\"since\",\"value\":\"2024-01-15\",\"type\":\"date\"},{\"name\":\"min\",\"value\":100}]"
   }
 }
 ```

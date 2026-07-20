@@ -1214,7 +1214,7 @@ begin
           LFailure := LFailure + ' Rollback also failed: ' + E2.Message;
       end;
 
-      GLastError := LFailure;
+      GLastError := WithFatalHint(LFailure);
       raise Exception.Create(GLastError);
     end;
   end;

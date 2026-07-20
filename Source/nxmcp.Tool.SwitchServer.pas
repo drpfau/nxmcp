@@ -99,6 +99,14 @@ begin
   LEmbedded := SameText(Trim(Params.Mode), 'embedded') or
                SameText(Trim(Params.Mode), 'local');
 
+  // Reject unknown modes instead of silently treating them as remote: a typo
+  // like "embeded" would otherwise fall through and fail with a misleading
+  // "Server host is required" - or worse, reconnect to the wrong target.
+  if not LEmbedded and (Trim(Params.Mode) <> '') and
+     not SameText(Trim(Params.Mode), 'remote') then
+    raise Exception.Create('Unknown mode "' + Params.Mode +
+      '" (valid values: remote, embedded)');
+
   // ---- Embedded mode ----
   if LEmbedded then
   begin
