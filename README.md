@@ -67,7 +67,7 @@ LogFileName=
 Port=3000
 Host=localhost
 Name=nxmcp
-Version=3.1.0.0
+Version=4.0.0.0
 Endpoint=/mcp
 
 [CORS]
