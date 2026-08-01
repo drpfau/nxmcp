@@ -237,7 +237,7 @@ database, by design. What each individual tool promises, however, is enforced.
 | Tool | Contract |
 |------|----------|
 | `execute_query` | Strictly read-only. One SELECT, no second statement after a semicolon, no `INTO` clause. |
-| `explain_query` | One SELECT/INSERT/UPDATE/DELETE. **Executes the statement** (see below); writes run in a transaction that is always rolled back. DDL rejected. |
+| `explain_query` | One SELECT/INSERT/UPDATE/DELETE (incl. `SELECT ... INTO`). **Executes the statement** (see below); writes run in a transaction that is always rolled back. DDL rejected. |
 | `get_table_data`, `get_table_schema` | Read-only, confined to the exact table named. |
 | `insert_record`, `update_records`, `delete_records`, `drop_index` | Confined to the table named; the operation cannot be redirected elsewhere. |
 | `execute_sql`, `batch_execute` | **Unrestricted by design** - any statement, including DDL. No guarantees are made or enforced. |
@@ -263,7 +263,14 @@ Two things make those contracts hold:
 by-product of running the statement (`TnxQuery.Log` is filled from the execution round
 trip; `Prepare` alone leaves it empty). A SELECT is harmless; INSERT/UPDATE/DELETE are
 wrapped in a transaction and always rolled back, and the response reports `rolledBack`.
-DDL is rejected because it is not transactional, so a rollback would not undo it.
+Once that transaction is open a lost connection is **not** retried - a retry would
+reconnect first, discarding the transaction and committing the write - so it fails
+instead, and the server rolls the transaction back on disconnect.
+
+`SELECT ... INTO` can be profiled as well, with one caveat the response spells out in a
+`note`: the rollback undoes the copied rows, but the table it creates is left behind
+empty, because creating a table is not transactional. Drop it with `drop_table` if you did
+not want it. DDL is rejected outright for that same reason.
 
 **If you embed nxmcp in a product** rather than using it as a dev tool - especially where
 an LLM composes SQL from untrusted input - point it at a NexusDB user with only the rights

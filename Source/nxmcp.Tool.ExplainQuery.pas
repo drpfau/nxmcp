@@ -54,8 +54,10 @@ begin
                   'IMPORTANT: NexusDB produces a plan only by running the statement, so this ' +
                   'tool executes it. A SELECT is read-only anyway; INSERT/UPDATE/DELETE are ' +
                   'run inside a transaction that is ALWAYS rolled back, so they change nothing ' +
-                  '(the response reports rolledBack). DDL is rejected because it is not ' +
-                  'transactional. Exactly one statement - no semicolon-separated batches. ' +
+                  '(the response reports rolledBack). SELECT ... INTO can be profiled too, but ' +
+                  'note that only the copied rows are rolled back - the table it creates is left ' +
+                  'behind empty, because creating it is not transactional. DDL is rejected for ' +
+                  'the same reason. Exactly one statement - no semicolon-separated batches. ' +
                   'Standard mode (#L+) shows plan summary: index used, join strategy, rows read. ' +
                   'Verbose mode (#V+) shows full optimizer internals: all available indexes, ' +
                   'relation analysis, index selection decisions, simplification steps. ' +
@@ -86,9 +88,6 @@ begin
     raise Exception.Create('Only SELECT, INSERT, UPDATE and DELETE can be explained. ' +
       'Producing a plan requires running the statement, and DDL is not transactional, so it ' +
       'could not be rolled back afterwards. Use execute_sql to run DDL.');
-  if LFacts.HasInto then
-    raise Exception.Create('SELECT ... INTO creates and populates a table, which a rollback ' +
-      'would not undo. Use execute_sql for it.');
 
   // Check connection
   if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
@@ -106,11 +105,34 @@ begin
   // explain a write without performing it, run it inside a transaction and always
   // roll back. DDL is rejected above because it is not transactional, so a
   // rollback would not undo it.
-  LNeedsRollback := LFacts.Kind in [skInsert, skUpdate, skDelete];
+  //
+  // A write is any of the three DML verbs, and also SELECT ... INTO - that reads
+  // like a query but creates and populates a table, so it has to be wrapped too.
+  LNeedsRollback := (LFacts.Kind in [skInsert, skUpdate, skDelete]) or
+                    ((LFacts.Kind = skSelect) and LFacts.HasInto);
 
   if LNeedsRollback then
+  begin
     nxmodule.nxDatabase1.StartTransaction(False);
-  try
+    try
+      // Deliberately NOT ExecuteWithReconnect: its retry reconnects first, which
+      // discards this transaction, so the second attempt would run the write
+      // outside any transaction and commit it - while InTransaction is then False
+      // and the rollback below is skipped, leaving a persisted write reported as
+      // rolledBack. A dropped connection rolls the transaction back server-side
+      // anyway, so failing here is both correct and safe. Same reasoning as
+      // batch_execute, which also refuses to retry once its transaction is open.
+      nxmodule.nxQuery1.Close;
+      nxmodule.nxQuery1.SQL.Text := LSwitch + ' ' + Params.Sql;
+      nxmodule.nxQuery1.Open;
+    except
+      if nxmodule.nxDatabase1.InTransaction then
+        nxmodule.nxDatabase1.Rollback;
+      raise;
+    end;
+  end
+  else
+    // Read-only: no transaction to lose, so a dropped connection can be retried.
     nxmodule.ExecuteWithReconnect(
       procedure
       begin
@@ -118,11 +140,6 @@ begin
         nxmodule.nxQuery1.SQL.Text := LSwitch + ' ' + Params.Sql;
         nxmodule.nxQuery1.Open;
       end);
-  except
-    if LNeedsRollback and nxmodule.nxDatabase1.InTransaction then
-      nxmodule.nxDatabase1.Rollback;
-    raise;
-  end;
 
   try
     // Build result from Log property
@@ -139,6 +156,15 @@ begin
       LResultObj.AddPair('lineCount', TJSONNumber.Create(nxmodule.nxQuery1.Log.Count));
       LResultObj.AddPair('executed', TJSONBool.Create(True));
       LResultObj.AddPair('rolledBack', TJSONBool.Create(LNeedsRollback));
+
+      // Be precise rather than reassuring: for SELECT ... INTO the rollback undoes
+      // the rows but NOT the table itself, because creating it is not
+      // transactional (verified - the target table is left behind, empty).
+      if (LFacts.Kind = skSelect) and LFacts.HasInto then
+        LResultObj.AddPair('note',
+          'The rollback undid the copied rows, but table creation is not transactional ' +
+          'in NexusDB: the table named by INTO now exists and is empty. Remove it with ' +
+          'drop_table if it was not wanted.');
 
       Result := LResultObj.ToJSON;
     finally

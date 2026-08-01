@@ -44,11 +44,26 @@ Fixes, in `nxmcp.SqlUtils.pas`:
   fragment, which keeps subselects working (`WHERE id IN (SELECT ...)`) while rejecting
   `1=1; DROP TABLE other`.
 
-`explain_query` now accepts one SELECT/INSERT/UPDATE/DELETE and rejects DDL. It still
-executes the statement, because NexusDB has no non-executing explain - `TnxQuery.Log` is
-filled from the execution round trip and `Prepare` alone leaves it empty (verified). Writes
-are therefore run inside a transaction that is **always rolled back**, and the response
-reports `executed` and `rolledBack`. DDL is rejected because it is not transactional.
+`explain_query` now accepts one SELECT/INSERT/UPDATE/DELETE - including `SELECT ... INTO`,
+which is worth profiling - and rejects DDL. It still executes the statement, because
+NexusDB has no non-executing explain: `TnxQuery.Log` is filled from the execution round
+trip and `Prepare` alone leaves it empty (verified). Writes are therefore run inside a
+transaction that is **always rolled back**, and the response reports `executed` and
+`rolledBack`.
+
+Two details that only show up at the edges:
+
+* Once the transaction is open, a lost connection is **not** retried.
+  `ExecuteWithReconnect` reconnects before retrying, which discards the transaction, so the
+  second attempt would run the write outside one and commit it - while `InTransaction` was
+  then false and the rollback was skipped, reporting `rolledBack: true` for a write that
+  had persisted. The transactional path now uses a plain `Open`; a dropped connection
+  fails, and the server rolls back on disconnect. Same reasoning `batch_execute` already
+  applies to its own transaction.
+* For `SELECT ... INTO` the rollback undoes the copied rows but **not** the table, because
+  creating one is not transactional (verified: the target is left behind, empty). Rather
+  than claim a clean rollback, the response carries a `note` saying so and pointing at
+  `drop_table`. DDL is rejected outright for the same reason.
 
 `execute_sql` and `batch_execute` are unchanged and remain deliberately unrestricted.
 
