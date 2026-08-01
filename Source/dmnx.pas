@@ -51,6 +51,14 @@ type
     FLogToFile: Boolean;
     FLogFileName: string;
     FConfigPath: string;
+    // Explicit [Tools]/[Resources] switches from the ini. Absent means enabled:
+    // this is a dev tool, so everything is on unless it was deliberately turned
+    // off - no friction for the default case.
+    FToolSwitches: TDictionary<string, Boolean>;
+    FResourceSwitches: TDictionary<string, Boolean>;
+    procedure LoadSwitches(AIni: TMemIniFile; const ASection: string;
+      ADest: TDictionary<string, Boolean>);
+    procedure LogDisabled(const AWhat: string; ASwitches: TDictionary<string, Boolean>);
     procedure LoadConfig;
     procedure CreateDefaultConfig;
     procedure ConfigureComponents;
@@ -93,6 +101,10 @@ type
       const AAliasPath: string = ''): Boolean;
     function SwitchToEmbedded(const AAliasPath: string;
       const ATablePassword: string = ''): Boolean;
+    /// <summary>True unless [Tools] ToolName=0 is present in the ini.</summary>
+    function IsToolEnabled(const AToolName: string): Boolean;
+    /// <summary>True unless [Resources] URI=0 is present in the ini.</summary>
+    function IsResourceEnabled(const AResourceURI: string): Boolean;
     class function ModeToStr(AMode: TnxServerMode): string; static;
     class function StrToMode(const AValue: string; ADefault: TnxServerMode): TnxServerMode; static;
     property ServerMode: TnxServerMode read FServerMode;
@@ -124,7 +136,10 @@ uses
   // process restart. We surface that state in our error messages.
   nxllException,
   nxmcp.FileLog,
-  MCPServer.Logger;
+  MCPServer.Logger,
+  // Only to enumerate the registered tools/resources when generating a default
+  // ini - the tool units have already registered themselves by then.
+  MCPServer.Registration;
 
 {%CLASSGROUP 'System.Classes.TPersistent'}
 
@@ -152,6 +167,8 @@ end;
 procedure Tnxmodule.DataModuleCreate(Sender: TObject);
 begin
   GLastError := '';
+  FToolSwitches := TDictionary<string, Boolean>.Create;
+  FResourceSwitches := TDictionary<string, Boolean>.Create;
   LoadConfig;
   ConfigureLogging;
   ConfigureSerializer;
@@ -164,6 +181,8 @@ end;
 procedure Tnxmodule.DataModuleDestroy(Sender: TObject);
 begin
   Disconnect;
+  FreeAndNil(FToolSwitches);
+  FreeAndNil(FResourceSwitches);
 end;
 
 procedure Tnxmodule.LoadConfig;
@@ -240,14 +259,81 @@ begin
     FTimeout := LIniFile.ReadInteger('Options', 'Timeout', FTimeout);
     FLogToFile := LIniFile.ReadBool('Options', 'LogToFile', FLogToFile);
     FLogFileName := LIniFile.ReadString('Options', 'LogFileName', FLogFileName);
+
+    // Per-tool / per-resource availability
+    LoadSwitches(LIniFile, 'Tools', FToolSwitches);
+    LoadSwitches(LIniFile, 'Resources', FResourceSwitches);
   finally
     LIniFile.Free;
   end;
+
+  LogDisabled('tool', FToolSwitches);
+  LogDisabled('resource', FResourceSwitches);
+end;
+
+procedure Tnxmodule.LoadSwitches(AIni: TMemIniFile; const ASection: string;
+  ADest: TDictionary<string, Boolean>);
+var
+  LNames: TStringList;
+  LName: string;
+begin
+  ADest.Clear;
+  if not AIni.SectionExists(ASection) then
+    Exit;
+
+  LNames := TStringList.Create;
+  try
+    AIni.ReadSection(ASection, LNames);
+    for LName in LNames do
+    begin
+      // Comment lines are written as keys with an empty value (the pattern the
+      // rest of this ini uses); they are not switches.
+      if LName.StartsWith(';') then
+        Continue;
+      ADest.AddOrSetValue(LowerCase(LName), AIni.ReadBool(ASection, LName, True));
+    end;
+  finally
+    LNames.Free;
+  end;
+end;
+
+procedure Tnxmodule.LogDisabled(const AWhat: string;
+  ASwitches: TDictionary<string, Boolean>);
+var
+  LPair: TPair<string, Boolean>;
+  LNames: string;
+begin
+  LNames := '';
+  for LPair in ASwitches do
+    if not LPair.Value then
+    begin
+      if LNames <> '' then
+        LNames := LNames + ', ';
+      LNames := LNames + LPair.Key;
+    end;
+
+  if LNames <> '' then
+    TLogger.Info('Disabled by configuration (' + AWhat + '): ' + LNames);
+end;
+
+function Tnxmodule.IsToolEnabled(const AToolName: string): Boolean;
+begin
+  // Unknown entries default to enabled - a tool added later is available without
+  // anyone having to touch an existing ini.
+  if not FToolSwitches.TryGetValue(LowerCase(AToolName), Result) then
+    Result := True;
+end;
+
+function Tnxmodule.IsResourceEnabled(const AResourceURI: string): Boolean;
+begin
+  if not FResourceSwitches.TryGetValue(LowerCase(AResourceURI), Result) then
+    Result := True;
 end;
 
 procedure Tnxmodule.CreateDefaultConfig;
 var
   LIniFile: TMemIniFile;
+  LName: string;
 begin
   LIniFile := TMemIniFile.Create(FConfigPath);
   try
@@ -313,6 +399,19 @@ begin
     LIniFile.WriteString('SSL', 'CertFile', '');
     LIniFile.WriteString('SSL', 'KeyFile', '');
     LIniFile.WriteString('SSL', 'RootCertFile', '');
+
+    // Tools / Resources sections - every entry written as 1 (available). The list
+    // comes from TMCPRegistry rather than a hard-coded table here: the tool units
+    // register themselves in their initialization sections, which run before this,
+    // so a newly added tool turns up in a freshly generated ini automatically.
+    LIniFile.WriteString('Tools', '; Set a tool to 0 to hide it: it is then not listed and cannot be called', '');
+    LIniFile.WriteString('Tools', '; Anything not listed here is available - new tools need no ini change', '');
+    for LName in TMCPRegistry.GetToolNames do
+      LIniFile.WriteBool('Tools', LName, True);
+
+    LIniFile.WriteString('Resources', '; Set a resource URI to 0 to hide it', '');
+    for LName in TMCPRegistry.GetResourceURIs do
+      LIniFile.WriteBool('Resources', LName, True);
 
     LIniFile.UpdateFile;
   finally

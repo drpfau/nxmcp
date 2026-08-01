@@ -52,6 +52,23 @@ reports `executed` and `rolledBack`. DDL is rejected because it is not transacti
 
 `execute_sql` and `batch_execute` are unchanged and remain deliberately unrestricted.
 
+### Added
+
+* **Per-tool and per-resource availability.** New `[Tools]` and `[Resources]` sections in
+  `nxmcp.ini`: an entry set to `0` is neither listed nor callable, so the client never sees
+  it. **Everything is on by default** - only an explicit `0` switches something off, so an
+  absent entry, an existing ini, or a tool added by a later version all just work. A freshly
+  generated ini lists every registered tool and resource set to `1`, enumerated from
+  `TMCPRegistry` rather than a hard-coded table, so new tools appear automatically.
+
+  Enforcement lives in `nxmcp.CapabilityFilter.pas`, which wraps the library's managers
+  rather than patching them: the MCP library builds its tool table once in the manager
+  constructor from a registry that has no unregister. The wrapper refuses `tools/call` /
+  `resources/read` **by name**, before the inner manager sees it - that layer does not
+  depend on any response shape - and strips disabled entries from the list responses on top.
+  If a list response ever stops matching the expected shape the filter raises rather than
+  passing the full list through, and the by-name refusal still holds.
+
 ### Changed
 
 * README gained a Security section documenting each tool's contract, how it is enforced,

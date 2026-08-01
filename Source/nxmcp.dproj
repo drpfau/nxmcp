@@ -86,6 +86,7 @@
             <DesignClass>TDataModule</DesignClass>
         </DCCReference>
         <DCCReference Include="nxmcp.FileLog.pas"/>
+        <DCCReference Include="nxmcp.CapabilityFilter.pas"/>
         <DCCReference Include="nxmcp.FieldTypes.pas"/>
         <DCCReference Include="nxmcp.ColumnSpec.pas"/>
         <DCCReference Include="nxmcp.SqlUtils.pas"/>

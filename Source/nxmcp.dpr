@@ -29,6 +29,7 @@ uses
   MCPServer.ResourcesManager,
   dmnx in 'dmnx.pas' {nxmodule: TDataModule},
   nxmcp.FileLog in 'nxmcp.FileLog.pas',
+  nxmcp.CapabilityFilter in 'nxmcp.CapabilityFilter.pas',
   nxmcp.FieldTypes in 'nxmcp.FieldTypes.pas',
   nxmcp.ColumnSpec in 'nxmcp.ColumnSpec.pas',
   nxmcp.SqlUtils in 'nxmcp.SqlUtils.pas',
@@ -199,8 +200,20 @@ begin
   ManagerRegistry := TMCPManagerRegistry.Create;
   CoreManager := TMCPCoreManager.Create(Settings);
   ManagerRegistry.RegisterManager(CoreManager);
-  ManagerRegistry.RegisterManager(TMCPToolsManager.Create);
-  ManagerRegistry.RegisterManager(TMCPResourcesManager.Create);
+  // Wrapped so that anything switched off in [Tools] / [Resources] is neither
+  // listed nor callable. Everything is on unless the ini says otherwise.
+  ManagerRegistry.RegisterManager(
+    FilterTools(TMCPToolsManager.Create,
+      function(const AName: string): Boolean
+      begin
+        Result := nxmodule.IsToolEnabled(AName);
+      end));
+  ManagerRegistry.RegisterManager(
+    FilterResources(TMCPResourcesManager.Create,
+      function(const AURI: string): Boolean
+      begin
+        Result := nxmodule.IsResourceEnabled(AURI);
+      end));
 end;
 
 procedure RunHTTPServer;

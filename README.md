@@ -201,6 +201,34 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | `nexusdb://tables` | List of all tables |
 | `nexusdb://schema` | Schema overview with record counts |
 
+## Restricting the available tools
+
+`nxmcp.ini` has a `[Tools]` and a `[Resources]` section listing every tool and resource:
+
+```ini
+[Tools]
+; Set a tool to 0 to hide it: it is then not listed and cannot be called
+; Anything not listed here is available - new tools need no ini change
+execute_query=1
+execute_sql=0
+drop_table=0
+
+[Resources]
+nexusdb://server=1
+nexusdb://schema=0
+```
+
+A tool set to `0` is not returned by `tools/list` and cannot be called - the client never
+sees it. Same for resources and `resources/list` / `resources/read`.
+
+**Everything is available by default.** Only entries explicitly set to `0` are switched
+off, so an absent entry - or a tool added by a later version - is simply available, and
+existing ini files keep working untouched. A freshly generated `nxmcp.ini` lists every
+registered tool set to `1`, as a starting point to edit.
+
+This is the low-effort way to narrow nxmcp to what a given deployment should be allowed to
+do, without maintaining a fork.
+
 ## Security
 
 nxmcp is a **development tool**: taken as a whole it can do anything to the target
@@ -242,9 +270,10 @@ an LLM composes SQL from untrusted input - point it at a NexusDB user with only 
 that product needs. The guards above keep each tool to its contract, but `execute_sql` and
 `batch_execute` remain deliberately unrestricted, so the connection's own rights are the
 only limit on what the server will accept. A restricted user is a structural boundary; the
-tool contracts are not a substitute for one. Alternatively, build your own fork restricted
-to the tools you need and deem safe - each tool is a self-contained unit registered in
-`nxmcp.dpr`, so removing one is a single line.
+tool contracts are not a substitute for one. Alternatively, switch off the tools you do not
+need in `[Tools]` (see above), or build your own fork restricted to the tools you deem
+safe - each tool is a self-contained unit registered in `nxmcp.dpr`, so removing one is a
+single line.
 
 ## Column Types
 
