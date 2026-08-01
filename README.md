@@ -69,7 +69,7 @@ LogFileName=
 Port=3000
 Host=localhost
 Name=nxmcp
-Version=4.1.0.0
+Version=5.0.0.0
 Endpoint=/mcp
 
 [CORS]
@@ -200,6 +200,51 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | `nexusdb://server` | Connection status and server info |
 | `nexusdb://tables` | List of all tables |
 | `nexusdb://schema` | Schema overview with record counts |
+
+## Security
+
+nxmcp is a **development tool**: taken as a whole it can do anything to the target
+database, by design. What each individual tool promises, however, is enforced.
+
+| Tool | Contract |
+|------|----------|
+| `execute_query` | Strictly read-only. One SELECT, no second statement after a semicolon, no `INTO` clause. |
+| `explain_query` | One SELECT/INSERT/UPDATE/DELETE. **Executes the statement** (see below); writes run in a transaction that is always rolled back. DDL rejected. |
+| `get_table_data`, `get_table_schema` | Read-only, confined to the exact table named. |
+| `insert_record`, `update_records`, `delete_records`, `drop_index` | Confined to the table named; the operation cannot be redirected elsewhere. |
+| `execute_sql`, `batch_execute` | **Unrestricted by design** - any statement, including DDL. No guarantees are made or enforced. |
+
+Two things make those contracts hold:
+
+* **Statement guards.** NexusDB executes a semicolon-separated batch submitted as a
+  single `SQL.Text` in one call, so `SELECT * FROM t; DELETE FROM t` would otherwise run
+  both. And `SELECT ... INTO` creates and populates a table, so it is a write that begins
+  with SELECT. Statements are classified with NexusDB's own SQL lexer (`TnxSQLTokenizer`),
+  so comments, string literals and quoted identifiers cannot be used to smuggle either
+  past the check. Subselects are unaffected - they add no top-level semicolon, so
+  `WHERE id IN (SELECT ...)` works normally in `update_records` / `delete_records`.
+* **Identifier validation.** Table, column, index and `orderBy` names are concatenated
+  into SQL, and NexusDB has **no escape syntax** for a quote inside a quoted identifier
+  (`SELECT 1 AS "a""b"` is a syntax error). They are therefore validated with the engine's
+  own `nxCheckValidTableName` / `nxCheckValidIdent`, whose character set excludes `"` and
+  `;`. Everything NexusDB considers a legal name still works, including meta tables
+  (`#TABLES`), memory/temp tables (`<name>`), child tables (`parent:child`) and names
+  containing spaces.
+
+**`explain_query` executes.** NexusDB has no non-executing explain - the plan is a
+by-product of running the statement (`TnxQuery.Log` is filled from the execution round
+trip; `Prepare` alone leaves it empty). A SELECT is harmless; INSERT/UPDATE/DELETE are
+wrapped in a transaction and always rolled back, and the response reports `rolledBack`.
+DDL is rejected because it is not transactional, so a rollback would not undo it.
+
+**If you embed nxmcp in a product** rather than using it as a dev tool - especially where
+an LLM composes SQL from untrusted input - point it at a NexusDB user with only the rights
+that product needs. The guards above keep each tool to its contract, but `execute_sql` and
+`batch_execute` remain deliberately unrestricted, so the connection's own rights are the
+only limit on what the server will accept. A restricted user is a structural boundary; the
+tool contracts are not a substitute for one. Alternatively, build your own fork restricted
+to the tools you need and deem safe - each tool is a self-contained unit registered in
+`nxmcp.dpr`, so removing one is a single line.
 
 ## Column Types
 

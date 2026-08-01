@@ -36,6 +36,7 @@ uses
   nxsdDataDictionaryStrings,
   nxllException,
   MCPServer.Registration,
+  nxmcp.SqlUtils,
   dmnx,
   nxmcp.FieldTypes;
 
@@ -233,8 +234,9 @@ var
   LRecordCount: Integer;
   I, J: Integer;
 begin
-  if Trim(Params.TableName) = '' then
-    raise Exception.Create('Table name cannot be empty');
+  // The name reaches a concatenated SELECT COUNT(*) further down, so validate it
+  // against NexusDB's own identifier rules before it gets there.
+  CheckTableName(Params.TableName);
 
   if not Assigned(nxmodule) or not nxmodule.EnsureConnection then
     raise Exception.Create('Not connected to NexusDB');

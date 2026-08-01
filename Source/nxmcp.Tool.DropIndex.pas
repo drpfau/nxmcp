@@ -38,6 +38,7 @@ implementation
 
 uses
   MCPServer.Registration,
+  nxmcp.SqlUtils,
   dmnx;
 
 { TDropIndexTool }
@@ -54,12 +55,9 @@ function TDropIndexTool.ExecuteWithParams(const Params: TDropIndexParams): strin
 var
   LResultObj: TJSONObject;
 begin
-  // Validate parameters
-  if Trim(Params.TableName) = '' then
-    raise Exception.Create('Table name cannot be empty');
-
-  if Trim(Params.IndexName) = '' then
-    raise Exception.Create('Index name cannot be empty');
+  // Both are concatenated into the DROP INDEX statement below.
+  CheckTableName(Params.TableName);
+  CheckIdentifier(Params.IndexName, 'index name');
 
   // Check connection
   if not Assigned(nxmodule) or not nxmodule.EnsureConnection then

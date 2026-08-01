@@ -72,7 +72,9 @@ begin
   inherited;
   FName := 'execute_query';
   FTitle := 'Execute SQL Query';
-  FDescription := 'Execute a SQL SELECT query against the NexusDB database and return results as JSON. ' +
+  FDescription := 'Execute a single SQL SELECT query against the NexusDB database and return ' +
+                  'results as JSON. Strictly read-only: exactly one statement (no second ' +
+                  'statement after a semicolon) and no INTO clause. ' +
                   'Use this for reading data. For INSERT/UPDATE/DELETE, use execute_sql instead. ' +
                   'Supports named parameters: write :name placeholders in the SQL and supply values via params ' +
                   '(preferred over embedding values in the SQL - no escaping or typed-literal syntax needed). ' +
@@ -88,14 +90,27 @@ var
   LResultObj: TJSONObject;
   LSql: string;
   LHasLog: Boolean;
+  LFacts: TnxSqlFacts;
 begin
   // Validate parameters
   if Trim(Params.Sql) = '' then
     raise Exception.Create('SQL query cannot be empty');
 
-  // Check for non-SELECT statements (strip statement switches like #T, #I, #S, #L, #B, #V first)
-  if not IsSelectStatement(Params.Sql) then
+  // This tool's contract is "reads only". NexusDB executes a semicolon-separated
+  // batch submitted as one SQL.Text in a single call, and SELECT ... INTO creates
+  // and populates a table, so a bare StartsWith('SELECT') is not enough to hold
+  // that contract - both are writes that begin with SELECT.
+  LFacts := AnalyzeSql(Params.Sql);
+  if LFacts.Kind = skUnparsable then
+    raise Exception.Create('SQL could not be parsed. Check the statement syntax.');
+  if LFacts.Kind <> skSelect then
     raise Exception.Create('Only SELECT queries are allowed. Use execute_sql for other statements.');
+  if not LFacts.IsSingle then
+    raise Exception.Create('Only a single SELECT is allowed - a second statement after a ' +
+      'semicolon would also be executed. Use batch_execute to run several statements.');
+  if LFacts.HasInto then
+    raise Exception.Create('SELECT ... INTO creates and populates a table, so it is not a ' +
+      'read. Use execute_sql for it.');
 
   // Determine max rows
   if Params.MaxRows > 0 then

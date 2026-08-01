@@ -2,6 +2,62 @@
 
 Notable changes to nxmcp.
 
+## [5.0.0.0] - 2026-08-01
+
+Major version because tool contracts are now enforced: input that earlier builds accepted
+is rejected, and `explain_query` no longer persists the statement it explains.
+
+### Security
+
+Tools that promise to read, or to act on one named table, could be made to do neither.
+Reported by a user embedding nxmcp in their own product; all four vectors were reproduced
+against a live server before fixing. Anyone running an earlier build should update.
+
+* **`execute_query` executed arbitrary statements.** Validation was
+  `StripSwitches(sql).ToUpper.StartsWith('SELECT')`, and NexusDB executes a
+  semicolon-separated batch submitted as one `SQL.Text` in a single call. So
+  `SELECT * FROM t; DELETE FROM t` returned a normal-looking result set *and* emptied the
+  table. `SELECT * INTO t2 FROM t1` also passed, and creates and populates a table.
+* **`explain_query` validated nothing at all** and called `Open`, so a bare
+  `DELETE FROM t` executed. This was the widest hole - no semicolon trick needed.
+* **`get_table_data` / `get_table_schema` concatenated the table name** into SQL inside
+  double quotes with no validation, so a name containing `"` closed the quote and appended
+  a second statement.
+* **`insert_record` / `update_records` / `delete_records` / `drop_index`** concatenated
+  table, column and index names (and, for the record tools, JSON keys) the same way.
+
+Fixes, in `nxmcp.SqlUtils.pas`:
+
+* `AnalyzeSql` classifies a statement using **NexusDB's own SQL lexer**
+  (`TnxSQLTokenizer`, `nxSQLTok.pas`) rather than scanning text. Comments, string literals
+  and quoted identifiers are distinct token types, so none of them can hide a `;` or an
+  `INTO`, and a column legitimately named `"into"` is not a false positive. Anything the
+  lexer cannot tokenize fails closed.
+* `CheckTableName` / `CheckIdentifier` validate against the engine's own
+  `nxCheckValidTableName` / `nxCheckValidIdent`. Their character set (`nxcValidIdentChars`,
+  `nxllConst.pas`) excludes `"` and `;`. Validation rather than escaping is not a
+  shortcut - NexusDB has no escape for a quote inside a quoted identifier at all
+  (`SELECT 1 AS "a""b"` is a syntax error), so there is nothing to escape to. Meta tables,
+  memory/temp tables (`<name>`), child tables (`parent:child`) and names with spaces all
+  still work.
+* `update_records` / `delete_records` validate the **composed** statement, not the WHERE
+  fragment, which keeps subselects working (`WHERE id IN (SELECT ...)`) while rejecting
+  `1=1; DROP TABLE other`.
+
+`explain_query` now accepts one SELECT/INSERT/UPDATE/DELETE and rejects DDL. It still
+executes the statement, because NexusDB has no non-executing explain - `TnxQuery.Log` is
+filled from the execution round trip and `Prepare` alone leaves it empty (verified). Writes
+are therefore run inside a transaction that is **always rolled back**, and the response
+reports `executed` and `rolledBack`. DDL is rejected because it is not transactional.
+
+`execute_sql` and `batch_execute` are unchanged and remain deliberately unrestricted.
+
+### Changed
+
+* README gained a Security section documenting each tool's contract, how it is enforced,
+  and the recommendation to use a rights-restricted NexusDB user when embedding nxmcp in a
+  product rather than using it as a dev tool.
+
 ## [4.1.0.0] - 2026-08-01
 
 ### Added

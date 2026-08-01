@@ -52,6 +52,7 @@ uses
   Data.DB,
   DataSet.Serialize,
   MCPServer.Registration,
+  nxmcp.SqlUtils,
   dmnx;
 
 { TGetTableDataTool }
@@ -73,9 +74,13 @@ var
   LSql: string;
   LRowCount: Integer;
 begin
-  // Validate parameters
-  if Trim(Params.TableName) = '' then
-    raise Exception.Create('Table name cannot be empty');
+  // The names are concatenated into the SQL below, and NexusDB has no escape for
+  // a quote inside a quoted identifier - so validate against the engine's own
+  // rules instead. '"' and ';' are not legal identifier characters, which is what
+  // stops a crafted name from closing the quote and appending a second statement.
+  CheckTableName(Params.TableName);
+  if Trim(Params.OrderBy) <> '' then
+    CheckIdentifier(Params.OrderBy, 'orderBy column');
 
   // Determine limits
   if Params.MaxRows > 0 then
