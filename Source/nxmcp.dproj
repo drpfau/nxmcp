@@ -50,10 +50,10 @@
         <Icon_MainIcon>nxmcp_Icon.ico</Icon_MainIcon>
         <Manifest_File>(Ohne)</Manifest_File>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
-        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=4.0.0.0;InternalName=nxmcp;LegalCopyright=;LegalTrademarks=;OriginalFilename=nxmcp.exe;ProgramID=;ProductName=$(MSBuildProjectName);ProductVersion=4.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=4.1.0.0;InternalName=nxmcp;LegalCopyright=;LegalTrademarks=;OriginalFilename=nxmcp.exe;ProgramID=;ProductName=$(MSBuildProjectName);ProductVersion=4.1.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_MajorVer>4</VerInfo_MajorVer>
-        <VerInfo_MinorVer>0</VerInfo_MinorVer>
+        <VerInfo_MinorVer>1</VerInfo_MinorVer>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
         <DCC_DebugDCUs>true</DCC_DebugDCUs>
@@ -123,10 +123,12 @@
         <DCCReference Include="nxmcp.Tool.RecoverTable.pas"/>
         <DCCReference Include="nxmcp.Tool.ChangePassword.pas"/>
         <DCCReference Include="nxmcp.Tool.GetAutoIncValue.pas"/>
+        <DCCReference Include="nxmcp.Tool.CloseInactiveTables.pas"/>
         <DCCReference Include="nxmcp.Tool.BatchExecute.pas"/>
         <DCCReference Include="nxmcp.Tool.CountRecords.pas"/>
         <DCCReference Include="nxmcp.Tool.ListIndexes.pas"/>
         <DCCReference Include="nxmcp.Tool.ExplainQuery.pas"/>
+        <DCCReference Include="nxmcp.Tool.ListLocks.pas"/>
         <DCCReference Include="nxmcp.Tool.ListAliases.pas"/>
         <DCCReference Include="nxmcp.Tool.SwitchDatabase.pas"/>
         <DCCReference Include="nxmcp.Tool.SwitchServer.pas"/>

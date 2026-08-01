@@ -70,12 +70,14 @@ uses
   nxmcp.Tool.RecoverTable in 'nxmcp.Tool.RecoverTable.pas',
   nxmcp.Tool.ChangePassword in 'nxmcp.Tool.ChangePassword.pas',
   nxmcp.Tool.GetAutoIncValue in 'nxmcp.Tool.GetAutoIncValue.pas',
+  nxmcp.Tool.CloseInactiveTables in 'nxmcp.Tool.CloseInactiveTables.pas',
   // Phase 6 - Transactions
   nxmcp.Tool.BatchExecute in 'nxmcp.Tool.BatchExecute.pas',
   // Phase 7 - Utility
   nxmcp.Tool.CountRecords in 'nxmcp.Tool.CountRecords.pas',
   nxmcp.Tool.ListIndexes in 'nxmcp.Tool.ListIndexes.pas',
   nxmcp.Tool.ExplainQuery in 'nxmcp.Tool.ExplainQuery.pas',
+  nxmcp.Tool.ListLocks in 'nxmcp.Tool.ListLocks.pas',
   // Phase 8 - Database Management
   nxmcp.Tool.ListAliases in 'nxmcp.Tool.ListAliases.pas',
   nxmcp.Tool.SwitchDatabase in 'nxmcp.Tool.SwitchDatabase.pas',

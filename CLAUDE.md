@@ -86,6 +86,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `recover_table` | Attempt to recover records from broken table |
 | `change_password` | Change table password |
 | `get_autoinc_value` | Get next auto-increment value |
+| `close_inactive_tables` | Release the tables *and folders* the server holds in its cache for this session |
 
 ### Transactions (Phase 6)
 | Tool | Description |
@@ -98,6 +99,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `count_records` | Get record count using table metadata (fast, no scan) |
 | `list_indexes` | List all indexes on a table with their fields |
 | `explain_query` | Show query execution plan (standard or verbose mode) |
+| `list_locks` | Live lock state from `#TABLE_LOCKS` / `#TRANSACTION_LOCKS`; absent meta tables reported, not raised |
 
 ### Database Management (Phase 8)
 | Tool | Description |
@@ -105,6 +107,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `list_aliases` | List available database aliases on the server (reports `currentAlias`/`currentAliasPath`) |
 | `switch_database` | Switch the active database by `aliasName` **or** `aliasPath` (keeps session) |
 | `switch_server` | Switch server connection (full reconnect): `mode` remote/embedded; optional `aliasName`/`aliasPath` |
+
+### Lock Inspection and Cache Release
+`list_locks` reads the two **reserved (virtual) meta tables** the server populates on demand: `#TABLE_LOCKS` (record/cursor-level locks — `LOCK_TYPE`, `REFNR`, `WAITING`) and `#TRANSACTION_LOCKS` (transaction-level — `LOCK_STATE`, `EXCLUSIVE`, `TRANSACTION_LEVEL`, `RUNNING_FOR`). Both are defined in `nxsqlProxies.pas` and were **added in a later NexusDB release**, so `list_locks` must not raise on an older server.
+
+Graceful degradation works by *asking the server*, not by trusting the constants compiled into nxmcp: when the `SELECT * FROM #<table>` fails, `ServerKnowsMetaTable` reads `SELECT METATABLE_NAME FROM #META`, which enumerates `ReservedTableNames` **as implemented by the SQL engine that ran the query**. In remote mode that engine lives in `nxServer.exe`, whose version is independent of this client — a client-side check would be wrong there. Only a name genuinely missing from `#META` yields `"available": false` plus an explanation; anything else (permissions, dead socket, …) is re-raised. If the `#META` probe itself fails, it returns `True` so the *original* error surfaces rather than a bogus "your server is too old". `list_locks` needs the SQL engine and therefore `EnsureConnection`. Row keys are lower-camel-cased by `dataset.serialize` (`TABLE_NAME` → `tableName`).
+
+`close_inactive_tables` calls `nxSession1.CloseInactiveTables` **then** `CloseInactiveFolders` (that order — a folder cannot be released while one of its tables is still open; the EnterpriseManager does the same two calls in the same order). It closes `nxQuery1`/`nxTable1` first, since our own active cursors would otherwise survive the sweep. It uses **`EnsureSession`, not `EnsureConnection`**: the cache belongs to the session, and freeing server-side file handles is most useful exactly when the current database will not open — requiring a healthy database would block the cleanup that fixes it.
 
 ### Logging
 `[Options] LogToFile` (default off) enables file logging; `[Options] LogFileName` overrides the path. **Leave `LogFileName` empty**: `Tnxmodule.ConfigureLogging` then derives `<exe name>.<pid>.log`, one file per process.

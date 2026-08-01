@@ -295,7 +295,7 @@ begin
     LIniFile.WriteInteger('Server', 'Port', 3000);
     LIniFile.WriteString('Server', 'Host', 'localhost');
     LIniFile.WriteString('Server', 'Name', 'nxmcp');
-    LIniFile.WriteString('Server', 'Version', '4.0.0.0');
+    LIniFile.WriteString('Server', 'Version', '4.1.0.0');
     LIniFile.WriteString('Server', 'Endpoint', '/mcp');
     LIniFile.WriteString('Server', '; Transport: http (network server, default) or stdio (for stdio MCP clients like Claude Code)', '');
     LIniFile.WriteString('Server', '; Overridden by the --stdio / --http command-line flags when present', '');

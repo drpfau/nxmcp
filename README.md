@@ -18,7 +18,9 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 * Delphi (RAD Studio 13) with NexusDB Komponente
 * NexusDB NXserver running and accessible
 * https://github.com/GDKsoftware/Delphi-MCP-Server (may have additional depencies)
-* https://github.com/viniciussanchez/dataset-serialize
+* https://github.com/viniciussanchez/dataset-serialize — **requires a one-line patch** for
+  `ftLongWord` columns (needed by `list_locks`; see [CHANGELOG.md](CHANGELOG.md) and
+  [upstream issue #269](https://github.com/viniciussanchez/dataset-serialize/issues/269))
 * Windows OS
 
 ## Configuration
@@ -67,7 +69,7 @@ LogFileName=
 Port=3000
 Host=localhost
 Name=nxmcp
-Version=4.0.0.0
+Version=4.1.0.0
 Endpoint=/mcp
 
 [CORS]
@@ -166,6 +168,7 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | `recover_table` | Recover records from broken table | `tableName` |
 | `change_password` | Change table password | `tableName`, `oldPassword`, `newPassword` |
 | `get_autoinc_value` | Get next auto-increment value | `tableName` |
+| `close_inactive_tables` | Release the tables **and folders** the server keeps open in its cache for this session (frees server-side file handles) | _(none)_ |
 
 ### Transactions
 
@@ -180,6 +183,7 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | `count_records` | Fast record count via metadata | `tableName` |
 | `list_indexes` | List all indexes on a table | `tableName` |
 | `explain_query` | Show query execution plan | `sql` |
+| `list_locks` | Report live lock state from `#TABLE_LOCKS` / `#TRANSACTION_LOCKS` (degrades gracefully on older servers) | `lockType?` (table/transaction/all), `tableName?`, `maxRows?` |
 
 ### Database Management
 
