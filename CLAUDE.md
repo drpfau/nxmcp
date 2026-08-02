@@ -17,6 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `sample code\Delphi-MCP-Server-Reference` - MCP Library (reference only)
   - `sample code\NexusDB` - NexusDB examples
   - `sample code\dataset.serialize` - JSON serialization library
+- `DEPENDENCIES.md` - library versions nxmcp is built against, and the dataset-serialize
+  patch a build needs
 
 ## Development Workflow
 
@@ -98,7 +100,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|-------------|
 | `count_records` | Get record count using table metadata (fast, no scan) |
 | `list_indexes` | List all indexes on a table with their fields |
-| `explain_query` | Show query execution plan (standard or verbose mode) |
+| `explain_query` | Show query execution plan (standard or verbose mode). Reads are analysed without being run; writes run in an always-rolled-back transaction — see "There is no EXPLAIN" |
 | `list_locks` | Live lock state from `#TABLE_LOCKS` / `#TRANSACTION_LOCKS`; absent meta tables reported, not raised |
 
 ### Database Management (Phase 8)
@@ -147,7 +149,7 @@ The `[Connection] Mode` ini key (or `switch_server`'s `mode` param) selects how 
 
 `Connect` branches to `ConnectRemote`/`ConnectEmbedded`; `Disconnect`/`ForceDisconnect` deactivate *both* engines so the components not in use are always `Active := False`. `WireServerEngine` (re)points the session at the mode's engine (session must be closed). Runtime switch: `switch_server mode="embedded" aliasPath=...` → `dmnx.SwitchToEmbedded`; `mode="remote" ...` → `dmnx.SwitchServer` (a mode change does a full reconnect with rollback and sets `FServerMode`; embedded→embedded only switches the database, see the rules above). `switch_database` by `aliasName` is rejected while embedded (path only). `IsEmbedded`/`ServerMode` expose the state; `Tnxmodule.ModeToStr`/`StrToMode` parse `Remote`/`Embedded`.
 
-> **Win64 build note (embedded SQL):** NexusDB's SQL tokenizer had a 64-bit pointer-truncation bug at `nxSQLTok.pas:1235` (`EndPtr := PWideChar(DWord(CurPtr) + ...)` — `DWord` is 32-bit). It only bites the **in-process** engine on Win64 (remote tokenizes in the 32-bit `nxServer.exe`), yielding `Invalid token: error at line 1 pos 1` for every embedded query. Fixed to `NativeUInt(CurPtr)`. Anyone rebuilding embedded on Win64 needs this fix in the NexusDB source.
+> **Win64 build note (embedded SQL):** an older NexusDB revision truncated a pointer through a 32-bit `DWord` in the SQL tokenizer, so every embedded query on Win64 failed with `Invalid token: error at line 1 pos 1` (remote is unaffected — it tokenizes in the 32-bit `nxServer.exe`). Reported by a contributor building embedded support in July 2026. **Fixed in 4.75**, which uses the pointer-sized `TnxMemSize` at `nxSQLTok.pas:1213`; no patch needed there or later.
 
 > **Stale-library build note (embedded switch AV):** a July 2026 beta build crashed with `Access violation ... Read of address 0000000000000010` on the *second* embedded engine activation in one process (`switch_server mode="embedded"`, any target path), after which the exception hook set `_FatalException` and every call failed with "suspended until the server is restarted". The crash is a NexusDB library bug in pre-2026-07-09 `nexusdb4` sources; it is not reproducible when built against the library from 2026-07-13 or later (verified by driving `dmnx.pas` through the exact scenario, cross-thread, valid and invalid paths). If that signature ever reappears, first check which library revision the exe was built against — and note nxmcp now avoids the engine bounce entirely for embedded→embedded switches anyway.
 
@@ -232,16 +234,67 @@ Prefix SQL with switches to control execution:
 | `#L` | `#L+` / `#L-` | Query logging: plan summary, index used, join strategy |
 | `#V` | `#V+` / `#V-` | Verbose logging: full optimizer decisions, all indexes considered, relation analysis |
 | `#T` | `#T 5000` | Timeout in milliseconds |
+| `#OPT` | `#OPT::STATEMENT::NO_PROCESSING='1'` | Set a server-side option; see below |
+
+`compPROD_nxSQL` (`nxSQLParse.pas`) loops over the switch kinds, so any number of them may be
+prefixed in any order — `#L+ #OPT::… #I- SELECT …` is one statement, not a batch.
+
+**`#OPT::<group>::<name>='<value>'`** sets an engine option, where `<group>` is `STATEMENT`,
+`DATABASE`, `TRANSCONTEXT` or `SESSION`. The one nxmcp uses is `NO_PROCESSING='1'` — the closest
+thing NexusDB has to an EXPLAIN, see below. Note the scope: `SESSION`/`DATABASE` options outlive
+the statement, which is why `StripSwitches` deliberately does **not** strip `#OPT` — leaving it in
+makes `AnalyzeSql` classify the input as `skOther`, so no caller can smuggle an option through the
+SQL of a tool that promises to read.
 
 ```pascal
-// Example: Get execution plan
-nxQuery1.SQL.Text := '#L+ SELECT * FROM Orders WHERE Status = ''Active''';
-nxQuery1.Prepare;
-// nxQuery1.Log now contains execution plan
+// Example: Get the execution plan for a read WITHOUT reading any rows
+nxQuery1.SQL.Text := '#L+ #OPT::STATEMENT::NO_PROCESSING=''1'' ' +
+                     'SELECT * FROM Orders WHERE Status = ''Active''';
+nxQuery1.Open;   // NOT Prepare - see below; Open returns an empty result set
+// nxQuery1.Log now contains the plan
 
 // Example: Disable index optimization for testing
 nxQuery1.SQL.Text := '#I- SELECT * FROM LargeTable WHERE ID > 100';
 ```
+
+### There is no EXPLAIN, and no query plan object either (verified in the engine source)
+Checked against the installed NexusDB tree in `C:\ProgramData\NexusDB\NexusDB4` (a hidden
+directory — it is on the compiler's unit path but easy to miss when searching for sources), and
+confirmed by the NexusDB lead developer.
+
+* **No EXPLAIN anywhere.** No such keyword in the grammar, no `GetPlan`/`QueryPlan` symbol.
+* **There is no plan artifact.** `TnxSqlRowBuilder.Optimize` records its decisions in the row
+  builder's own state (index choice, join strategy, `WasOptimized`/`FullyOptimized`) and merely
+  *narrates* them via `LogNormal`/`LogVerbose` into a `TnxSqlLogList` — a plain string list. There
+  is nothing to serialize, which is why there is nothing to EXPLAIN.
+* **`Prepare` does not produce it.** `TnxSqlStatement.ssPrepare` (`nxsqlEngine.pas:592`) only
+  parses and binds; the only thing it ever writes to its stream is an error message. The optimizer
+  runs inside execution — `Optimize` is called at the top of `TnxSqlRowBuilder.Execute`
+  (`nxsqlTableExp.pas:7437`).
+* **The log ships only in the exec reply.** `TnxSqlStatement.Exec` writes `LogList` into the exec
+  stream and then clears it (`nxsqlEngine.pas:463-477`); the client reads `sdLog` exclusively from
+  `ExecStream` (`nxdb.pas:20683-20694`) and never looks at the prepare stream. So `Prepare` alone
+  always leaves `Log` empty.
+* **A failed statement still returns its plan.** The engine attaches the log to the exception as
+  `nxeCustomInfo('SqlLog', …)` (`nxsqlEngine.pas:499`) and the client falls back to it when the
+  normal path yielded nothing (`nxdb.pas:20714`). That is why `get_query_log` works after a
+  timeout.
+
+**`NO_PROCESSING` is the engine's answer for reads.** With the option set,
+`TnxSqlRowBuilder.ReadSources` (`nxsqlTableExp.pas:4048`) returns immediately while `Optimize` —
+and therefore the whole `#L+`/`#V+` narration — still runs: parsed, bound, optimized, zero rows
+read. Two adapters shipped in NexusDB's own `Bonus\` folder (DevExpress Server Mode, ReportBuilder
+DADE) use it to fetch a query's metadata without its data.
+
+**It refuses writes.** INSERT/UPDATE/DELETE/COMMIT raise `'… not supported in no processing mode'`
+at the top of their `Execute` (`nxsqlDataManip.pas:560/1049/1391/1972`), as does all DDL
+(`nxsqlDataDef.pas`). So `explain_query` needs two strategies, and has them:
+
+| Statement | Strategy | Response |
+|---|---|---|
+| SELECT (no INTO) | `#OPT::STATEMENT::NO_PROCESSING='1'` — optimizer runs, row loop does not | `executed: false` |
+| INSERT/UPDATE/DELETE, SELECT … INTO | really executed, inside a transaction that is always rolled back | `executed: true`, `rolledBack: true` |
+| DDL | rejected — not transactional, and no-processing refuses it too | — |
 
 ### Transaction API
 NexusDB transactions are managed via `TnxDatabase`:

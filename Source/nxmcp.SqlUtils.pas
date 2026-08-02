@@ -9,6 +9,14 @@ uses
 /// Strips NexusDB statement switches (#T, #I, #S, #L, #B, #V) from the
 /// beginning of a SQL string and returns the remaining SQL keyword.
 /// Switches: #T nnn, #I+/-, #S+/-, #L+/-, #B+/-, #V+/-
+///
+/// The engine's sixth prefix switch, #OPT::&lt;group&gt;::&lt;name&gt;='&lt;value&gt;', is
+/// deliberately NOT stripped. It sets a server-side option, and its group may be
+/// SESSION or DATABASE - i.e. state outliving the statement. Leaving it in means
+/// AnalyzeSql sees #OPT as the first token, reports skOther, and every tool that
+/// demands a SELECT rejects the input. nxmcp emits #OPT itself where it needs it
+/// (explain_query, statement scope only); callers must not be able to smuggle it
+/// through the SQL of a read-only tool.
 /// </summary>
 function StripSwitches(const ASql: string): string;
 

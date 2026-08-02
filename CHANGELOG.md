@@ -2,6 +2,47 @@
 
 Notable changes to nxmcp.
 
+## [5.1.0.0] - 2026-08-02
+
+### Changed
+
+* **`explain_query` no longer executes the SELECT it explains.** NexusDB has no EXPLAIN,
+  and the plan is only narrated into `TnxQuery.Log` while a statement runs — the log is
+  written into the ExecStream of `StatementExecDirect` and never into the prepare stream.
+  The engine's own answer is the statement option
+  `#OPT::STATEMENT::NO_PROCESSING='1'`, which makes `TnxSqlRowBuilder.ReadSources` return
+  immediately while `Optimize` — and with it the whole `#L+`/`#V+` narration — still runs.
+  A read is therefore parsed, bound and optimized without a single row being read; the
+  response reports `executed: false` and a note saying so. Row counts the optimizer only
+  learns while reading are absent from such a plan.
+
+  Writes are unchanged: no-processing mode rejects them (`UPDATE not supported in no
+  processing mode`), so INSERT/UPDATE/DELETE and `SELECT ... INTO` still run inside a
+  transaction that is always rolled back. DDL is still refused — it fits neither strategy.
+
+* `StripSwitches` deliberately does **not** strip `#OPT::<group>::<name>='<value>'`.
+  Unlike the other prefix switches its scope may be SESSION or DATABASE, i.e. state that
+  outlives the statement. Leaving it in place means `AnalyzeSql` reports `skOther` and
+  every tool that demands a SELECT rejects it, so it cannot be smuggled through a
+  read-only tool. nxmcp emits `#OPT` itself only where it needs it, at statement scope.
+
+### Added
+
+* `DEPENDENCIES.md` — the library versions nxmcp is built against and the one patch a
+  build needs. Now built against
+  [Delphi-MCP-Server](https://github.com/GDKsoftware/Delphi-MCP-Server) `4e98e3b`
+  (was `92bdbe9`), which fixes an access violation on unparseable JSON-RPC requests and
+  invalid JSON in STDIO transport-level error replies. Note one behaviour change from
+  that upgrade: unknown keys in a tool's `arguments` are now rejected with
+  `Unknown parameter "x". Valid parameters: ...` instead of being ignored.
+
+### Fixed
+
+* Corrected the Win64 embedded build note: the SQL tokenizer's pointer truncation was
+  fixed by NexusDB in 4.75, which uses the pointer-sized `TnxMemSize`. No patch is needed
+  there or later — the previous note named a line and a code fragment that no longer
+  exist.
+
 ## [5.0.0.0] - 2026-08-01
 
 Major version because tool contracts are now enforced: input that earlier builds accepted
