@@ -98,6 +98,7 @@ begin
 
   LColumnList := TStringList.Create;
   try
+    LColumnList.StrictDelimiter := True;
     LColumnList.CommaText := Params.Columns;
 
     if LColumnList.Count = 0 then
