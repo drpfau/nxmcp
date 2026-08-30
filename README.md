@@ -5,6 +5,7 @@ An MCP (Model Context Protocol) server that enables AI assistants to interact wi
 ## Features
 
 * **Dual Transport** - HTTP and STDIO (for Claude Desktop and other MCP clients)
+* **Safe Shared Access** - Concurrent HTTP callers are serialized with a bounded wait, and timed-out NexusDB sessions are replaced before the next request
 * **Query Execution** - Run SELECT queries and retrieve results as JSON
 * **Data Manipulation** - Insert, update, and delete records
 * **Schema Management** - Create tables, add columns, manage indexes
@@ -57,8 +58,10 @@ Password=your_password
 [Options]
 ; Automatically connect on startup (1=yes, 0=no)
 AutoConnect=1
-; Connection timeout in milliseconds
+; Per-operation NexusDB timeout in milliseconds
 Timeout=3000
+; Maximum time to wait for another database request to finish (0=fail fast)
+BusyTimeout=3000
 ; Write log output to a file (1=yes, 0=no)
 LogToFile=0
 ; Log file path (leave empty for <exe name>.log next to the executable)
@@ -69,7 +72,7 @@ LogFileName=
 Port=3000
 Host=localhost
 Name=nxmcp
-Version=5.1.0.0
+Version=6.0.0.0
 Endpoint=/mcp
 
 [CORS]
@@ -95,6 +98,26 @@ RootCertFile=
 
 ## Running
 
+### Restricted or portable environments
+
+During unit initialization, the NexusDB exception hook creates a per-executable
+application-data directory below
+`C:\ProgramData\NexusDB4\nxmcp\<encoded executable directory>`. Normal Windows
+permissions allow regular users to create this directory. A sandbox, hardened service
+account, or locked-down `ProgramData` ACL may not.
+
+In such an environment, point NexusDB at a writable application-data directory:
+
+```bat
+nxmcp.exe /CONFIG:"C:\path\to\writable\nxmcp-state"
+```
+
+This switch controls NexusDB's application-data and exception-log location. It does not
+move `nxmcp.ini`, which remains next to `nxmcp.exe`, and it does not change the configured
+database path. If the default directory cannot be created, startup can fail before nxmcp's
+own error handling runs, typically as runtime error 217 followed by an application-error
+dialog.
+
 ### HTTP Transport (default)
 
 ```
@@ -102,6 +125,22 @@ nxmcp.exe
 ```
 
 The server starts on `http://localhost:3000/mcp` by default.
+
+### Concurrent HTTP clients
+
+One nxmcp process currently owns one NexusDB session. Database-backed `tools/call` and
+`resources/read` requests therefore execute one at a time; this prevents NexusDB's
+`DBIERR_REENTERED` failure when several MCP clients share the HTTP endpoint. Waiting is
+bounded by `[Options] BusyTimeout`. If the lease cannot be acquired in time, the request
+returns a normal MCP error result saying the database is busy and no database operation was
+started. `0` means fail fast; negative values are invalid and fall back to 3000 ms.
+
+`[Options] Timeout` is separate: it limits the NexusDB operation itself. Changing it with
+`set_timeout` does not change `BusyTimeout`. A general NexusDB timeout is reported once and
+is never replayed; nxmcp best-effort cancels the outstanding work, retires the affected
+session, and reconnects before releasing the execution lease. Discovery (`tools/list`,
+`resources/list`, resource-template listing), `initialize`, and `ping` do not wait for the
+database lease.
 
 ### STDIO Transport
 

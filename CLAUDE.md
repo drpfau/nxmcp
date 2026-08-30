@@ -120,18 +120,76 @@ Graceful degradation works by *asking the server*, not by trusting the constants
 ### Logging
 `[Options] LogToFile` (default off) enables file logging; `[Options] LogFileName` overrides the path. **Leave `LogFileName` empty**: `Tnxmodule.ConfigureLogging` then derives `<exe name>.<pid>.log`, one file per process.
 
+NexusDB also installs its own exception hook during unit initialization, before the nxmcp
+program body runs. By default it creates a per-executable application-home directory below
+`C:\ProgramData\NexusDB4\nxmcp\<encoded executable directory>`. Standard Windows ACLs
+normally permit this, but restricted runners and sandboxes may block the write. Always run
+relocated diagnostic copies in such environments with a writable NexusDB application home,
+for example:
+
+```text
+nxmcp.exe /CONFIG:"C:\projects\nxmcp\temp\nxmcp-state"
+```
+
+`/CONFIG:` affects NexusDB's application-data and exception-log location only; nxmcp still
+loads `nxmcp.ini` beside the executable. A failure here occurs before `nxmcp.dpr` can catch or
+log it: the primary symptom is runtime error 217. A later access violation in
+`System.TMonitor.Enter` is secondary finalization damage, not evidence that embedded
+connection startup was reached. Do not launch a configuration matrix until a remote
+`AutoConnect=0` control starts successfully with the same `/CONFIG:` override.
+
 File logging is implemented in `nxmcp.FileLog.pas`, **not** by `TLogger.LogToFile` — `ConfigureLogging` explicitly sets `TLogger.LogToFile := False` and hooks `TLogger.OnLogMessage` instead. Do not turn `TLogger.LogToFile` back on. The library's `EnsureLogFile` opens the log through `TStreamWriter.Create(FileName, ...)`, which passes no share bits (exclusive handle) and lets an open failure escape as an exception. Under the STDIO transport *every MCP client spawns its own `nxmcp.exe`* — Claude Code and Claude Desktop routinely run concurrently — so the second instance could not open the shared log and died before its transport started, which the client reports as "MCP server exited immediately".
 
 `nxmcp.FileLog` instead opens `fmShareDenyWrite` (editors and `tail` can read the log while nxmcp holds it), appends, and is fail-soft: an unopenable or unwritable log emits a `[WARN ] File logging disabled` line on **stderr** (never stdout, which carries JSON-RPC) and the server continues console-only. Setting an explicit `LogFileName` shared by two concurrent instances is therefore safe but pointless — the loser silently drops to console-only.
 
-### Connection Recovery: EnsureConnection vs EnsureSession vs ExecuteWithReconnect
+### Concurrency and Connection Recovery
+
+One process currently owns one mutable NexusDB session. HTTP dispatch is concurrent, so the
+tool and resource managers are wrapped at startup as:
+
+```text
+FilterTools(SerializeTools(TMCPToolsManager.Create, SharedGate), IsToolEnabled)
+FilterResources(SerializeResources(TMCPResourcesManager.Create, SharedGate), IsResourceEnabled)
+```
+
+The filter must remain outermost, and both serialized managers must receive the same gate.
+Only `tools/call` and `resources/read` acquire it. `tools/list`, `resources/list`,
+`resources/templates/list`, core methods such as `initialize`, and `ping` bypass it.
+`[Options] BusyTimeout` bounds acquisition independently of the database `Timeout`; `0`
+fails fast and negative configured values fall back to 3000 ms. Never log request arguments,
+SQL, passwords, or result data while diagnosing contention—only the tool name/resource URI
+and wait duration.
+
+Every server round-trip must declare a retry policy. Use `ExecuteWithReconnect` only where
+replaying the action is part of the existing contract. Use `ExecuteWithoutRetry` for DDL,
+restructure, maintenance, password, and other ambiguous writes. Transaction and switch code
+may retain a documented state machine, but it must call `RecoverSessionAfterError` for a
+poisoned-session failure before returning. Pure local component property access needs no
+round-trip boundary after connection establishment.
+
 `nxSession1.Active` and `nxDatabase1.Connected` are **client-side flags**: after the server dies or the socket drops they both still report `True`, and only the next server round-trip reveals the truth. Recovery therefore needs two mechanisms, and most tools use both.
 
 | Helper | Guarantees | Use when |
 |--------|-----------|----------|
 | `EnsureConnection` | session **and** database open (`Reconnect` = `ForceDisconnect` + `Connect`) | the tool needs the *current* database — the 36 data/schema tools |
 | `EnsureSession` | session/transport/engine only, **database left closed** | the tool is server-level and must survive a database that won't open: `list_aliases`, `switch_database` |
-| `ExecuteWithReconnect` | catches `DBIERR_SERVERCOMMLOST` (`$2C0C`), reconnects, retries the action **once** | wraps the actual round-trip; the only way to detect a stale-but-`Active` handle |
+| `ExecuteWithReconnect` | recovers communication loss/re-entry and retries once; reports a timeout without retry | replay-safe round-trips |
+| `ExecuteWithoutRetry` | recovers a poisoned session but always reports the original failure | ambiguous writes, DDL/restructure, maintenance and password changes |
+| `RecoverSessionAfterError` | classifies, best-effort cancels timeout/re-entry, fully retires and reconnects | transaction/switch state machines that catch the exception themselves |
+
+Recovery policy:
+
+| NexusDB failure | Retry-enabled boundary | No-retry boundary | Session action |
+|---|---|---|---|
+| `DBIERR_SERVERCOMMLOST` | retry once | report original error | retire and reconnect |
+| `DBIERR_REENTERED` | retry once | report original error | cancel best-effort, retire and reconnect |
+| `DBIERR_NX_GENERALTIMEOUT` | never retry | never retry | cancel best-effort, retire and reconnect |
+| Other | never retry | never retry | leave session alone unless the owning state machine requires cleanup |
+
+Classification lives in `nxmcp.NexusErrors.pas` and must recognize both NexusDB exception
+families (`EnxDatabaseError` and `EnxBaseException`). The attempt loop classifies failures
+from the retry as well as the first call. Cleanup/reconnect failure is logged but must never
+mask the original operation exception.
 
 Rules:
 - **Never call `EnsureConnection`/`EnsureSession` in `switch_server` or `SwitchToEmbedded`.** The server being switched away from is frequently the one that is down — that is *why* the caller is switching. Requiring the old connection to be healthy turns the escape hatch into a deadlock.

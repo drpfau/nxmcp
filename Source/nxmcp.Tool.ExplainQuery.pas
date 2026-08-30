@@ -141,22 +141,57 @@ begin
 
   if LNeedsRollback then
   begin
-    nxmodule.nxDatabase1.StartTransaction(False);
+    // Writes must never be replayed.  ExecuteWithoutRetry still retires a
+    // poisoned session, but deliberately makes no second attempt after a
+    // transaction or statement round-trip fails.
     try
-      // Deliberately NOT ExecuteWithReconnect: its retry reconnects first, which
-      // discards this transaction, so the second attempt would run the write
-      // outside any transaction and commit it - while InTransaction is then False
-      // and the rollback below is skipped, leaving a persisted write reported as
-      // rolledBack. A dropped connection rolls the transaction back server-side
-      // anyway, so failing here is both correct and safe. Same reasoning as
-      // batch_execute, which also refuses to retry once its transaction is open.
-      nxmodule.nxQuery1.Close;
-      nxmodule.nxQuery1.SQL.Text := LSwitch + ' ' + Params.Sql;
-      nxmodule.nxQuery1.Open;
+      nxmodule.ExecuteWithoutRetry(
+        procedure
+        begin
+          nxmodule.nxDatabase1.StartTransaction(False);
+          nxmodule.nxQuery1.Close;
+          nxmodule.nxQuery1.SQL.Text := LSwitch + ' ' + Params.Sql;
+          nxmodule.nxQuery1.Open;
+        end);
     except
-      if nxmodule.nxDatabase1.InTransaction then
-        nxmodule.nxDatabase1.Rollback;
-      raise;
+      on E: Exception do
+      begin
+        // Never replay a write used for explanation. Preserve the query error
+        // even if rollback also fails, then retire a poisoned session.
+        if nxmodule.nxDatabase1.InTransaction then
+        begin
+          try
+            nxmodule.ExecuteWithoutRetry(
+              procedure
+              begin
+                nxmodule.nxDatabase1.Rollback;
+              end);
+          except
+            on LRollbackError: Exception do
+            begin
+              // ExecuteWithoutRetry has already retired any poisoned session.
+              // Preserve the original query error.
+            end;
+          end;
+        end;
+        // A failure before the normal result/finally path must still close the
+        // cursor. Cleanup is best-effort so it cannot replace the statement
+        // error being re-raised.
+        try
+          nxmodule.ExecuteWithoutRetry(
+            procedure
+            begin
+              nxmodule.nxQuery1.Close;
+            end);
+        except
+          on LCloseError: Exception do
+          begin
+            // Preserve E; ExecuteWithoutRetry already retired poisoned
+            // sessions raised by the close.
+          end;
+        end;
+        raise;
+      end;
     end;
   end
   else
@@ -173,6 +208,7 @@ begin
   try
     // Build result from Log property
     LResultObj := TJSONObject.Create;
+    LPlanArray := nil;
     try
       LResultObj.AddPair('sql', Params.Sql);
       LResultObj.AddPair('mode', IfThen(Params.Verbose, 'verbose', 'standard'));
@@ -182,6 +218,7 @@ begin
         LPlanArray.Add(nxmodule.nxQuery1.Log[I]);
 
       LResultObj.AddPair('plan', LPlanArray);
+      LPlanArray := nil;
       LResultObj.AddPair('lineCount', TJSONNumber.Create(nxmodule.nxQuery1.Log.Count));
       LResultObj.AddPair('executed', TJSONBool.Create(not LNoProcessing));
       LResultObj.AddPair('rolledBack', TJSONBool.Create(LNeedsRollback));
@@ -206,13 +243,43 @@ begin
 
       Result := LResultObj.ToJSON;
     finally
+      LPlanArray.Free;
       LResultObj.Free;
     end;
   finally
-    nxmodule.nxQuery1.Close;
+    try
+      nxmodule.ExecuteWithoutRetry(
+        procedure
+        begin
+          nxmodule.nxQuery1.Close;
+        end);
+    except
+      on E: Exception do
+      begin
+        // A failing close must not skip rollback. Preserve the close error even
+        // when rollback fails. Each cleanup round-trip applies no-retry recovery.
+        if LNeedsRollback and nxmodule.nxDatabase1.InTransaction then
+          try
+            nxmodule.ExecuteWithoutRetry(
+              procedure
+              begin
+                nxmodule.nxDatabase1.Rollback;
+              end);
+          except
+          end;
+        raise;
+      end;
+    end;
+
     // Always roll back - the statement ran only to produce the plan.
     if LNeedsRollback and nxmodule.nxDatabase1.InTransaction then
-      nxmodule.nxDatabase1.Rollback;
+    begin
+      nxmodule.ExecuteWithoutRetry(
+        procedure
+        begin
+          nxmodule.nxDatabase1.Rollback;
+        end);
+    end;
   end;
 end;
 

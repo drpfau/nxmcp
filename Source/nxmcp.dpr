@@ -30,6 +30,7 @@ uses
   dmnx in 'dmnx.pas' {nxmodule: TDataModule},
   nxmcp.FileLog in 'nxmcp.FileLog.pas',
   nxmcp.CapabilityFilter in 'nxmcp.CapabilityFilter.pas',
+  nxmcp.SerializedManager in 'nxmcp.SerializedManager.pas',
   nxmcp.FieldTypes in 'nxmcp.FieldTypes.pas',
   nxmcp.ColumnSpec in 'nxmcp.ColumnSpec.pas',
   nxmcp.SqlUtils in 'nxmcp.SqlUtils.pas',
@@ -195,21 +196,26 @@ begin
 end;
 
 procedure CreateManagerRegistry;
+var
+  LExecutionGate: INxExecutionGate;
 begin
   Settings := TMCPSettings.Create(nxmodule.GetConfigPath);
   ManagerRegistry := TMCPManagerRegistry.Create;
   CoreManager := TMCPCoreManager.Create(Settings);
   ManagerRegistry.RegisterManager(CoreManager);
+  LExecutionGate := CreateExecutionGate;
   // Wrapped so that anything switched off in [Tools] / [Resources] is neither
   // listed nor callable. Everything is on unless the ini says otherwise.
   ManagerRegistry.RegisterManager(
-    FilterTools(TMCPToolsManager.Create,
+    FilterTools(SerializeTools(TMCPToolsManager.Create, LExecutionGate,
+      Cardinal(nxmodule.BusyTimeout)),
       function(const AName: string): Boolean
       begin
         Result := nxmodule.IsToolEnabled(AName);
       end));
   ManagerRegistry.RegisterManager(
-    FilterResources(TMCPResourcesManager.Create,
+    FilterResources(SerializeResources(TMCPResourcesManager.Create, LExecutionGate,
+      Cardinal(nxmodule.BusyTimeout)),
       function(const AURI: string): Boolean
       begin
         Result := nxmodule.IsResourceEnabled(AURI);
