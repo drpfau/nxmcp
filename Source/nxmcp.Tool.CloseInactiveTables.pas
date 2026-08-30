@@ -62,9 +62,9 @@ begin
   if not nxmodule.EnsureSession then
     raise Exception.Create('Not connected to NexusDB server: ' + nxmodule.GetLastError);
 
-  // Both calls are server round-trips, so a session that still reports Active
-  // over a dead socket only reveals itself here - retry once via reconnect.
-  nxmodule.ExecuteWithReconnect(
+  // This maintenance action changes server cache state. Recover a poisoned
+  // session, but never replay an operation whose first outcome is unknown.
+  nxmodule.ExecuteWithoutRetry(
     procedure
     begin
       // Our own cursors count as active and would survive the sweep; close them

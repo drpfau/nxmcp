@@ -102,6 +102,7 @@ begin
     nxmodule.ExecuteWithReconnect(
       procedure
       begin
+        LFound := False;
         nxmodule.nxQuery1.Close;
         nxmodule.nxQuery1.Params.Clear;
         nxmodule.nxQuery1.SQL.Text := 'SELECT METATABLE_NAME FROM #META';
@@ -136,101 +137,159 @@ end;
 function TListLocksTool.CollectLocks(const AMetaTableName, ATableFilter: string;
   AMaxRows: Integer): TJSONObject;
 var
-  LRows: TJSONArray;
   LRowCount: Integer;
   LTruncated: Boolean;
-  LOpenError: string;
   LTableField: TField;
+  LIncludeRow: Boolean;
+  LOpenAttempted: Boolean;
+  LReadOpened: Boolean;
+  LReadError: string;
+  LReadResult: TJSONObject;
+  LReadRows: TJSONArray;
 begin
-  LOpenError := '';
+  LOpenAttempted := False;
+  LReadOpened := False;
+  LReadResult := nil;
+  LReadRows := nil;
   try
-    nxmodule.ExecuteWithReconnect(
-      procedure
-      begin
-        nxmodule.nxQuery1.Close;
-        // Drop bindings left over from an earlier statement: setting SQL.Text
-        // carries old values onto same-named params of the new statement.
-        nxmodule.nxQuery1.Params.Clear;
-        nxmodule.nxQuery1.SQL.Text := 'SELECT * FROM ' + AMetaTableName;
-        nxmodule.nxQuery1.Open;
-      end);
-  except
-    on E: Exception do
-      LOpenError := E.Message;
-  end;
-
-  if LOpenError <> '' then
-  begin
-    // Only an unknown meta table is reported gracefully - a permission problem,
-    // a dead connection or any other failure must still surface as an error.
-    if ServerKnowsMetaTable(AMetaTableName) then
-      raise Exception.Create('Failed to read ' + AMetaTableName + ': ' + LOpenError);
-
-    Result := TJSONObject.Create;
     try
-      Result.AddPair('metaTable', AMetaTableName);
-      Result.AddPair('available', TJSONBool.Create(False));
-      Result.AddPair('message',
-        'This NexusDB server does not provide ' + AMetaTableName + '. The lock meta ' +
-        'tables were added in a later NexusDB release - upgrade the server (in ' +
-        'embedded mode: rebuild nxmcp against a newer NexusDB library) to inspect ' +
-        'locks. Lock conflicts are still reported in full detail in the error ' +
-        'message raised when a lock cannot be granted.');
-      Result.AddPair('serverError', LOpenError);
-    except
-      Result.Free;
-      raise;
-    end;
-    Exit;
-  end;
-
-  try
-    Result := TJSONObject.Create;
-    try
-      LRows := TJSONArray.Create;
-      try
-        LRowCount := 0;
-        LTruncated := False;
-        LTableField := nxmodule.nxQuery1.FindField(cTableNameField);
-        // A filter we cannot apply would silently report "no locks", which reads
-        // like an all-clear. Say so instead.
-        if (ATableFilter <> '') and not Assigned(LTableField) then
-          raise Exception.Create(AMetaTableName + ' has no ' + cTableNameField +
-            ' column on this server; retry without tableName to see all locks.');
-
-        nxmodule.nxQuery1.First;
-        while not nxmodule.nxQuery1.Eof do
+      nxmodule.ExecuteWithReconnect(
+        procedure
         begin
-          if (ATableFilter = '') or
-             SameText(Trim(LTableField.AsString), ATableFilter) then
+          // This also makes the action self-contained if the retry policy ever
+          // invokes it after a partially completed attempt.
+          if Assigned(LReadResult) then
           begin
-            if LRowCount >= AMaxRows then
-            begin
-              LTruncated := True;
-              Break;
-            end;
-            LRows.AddElement(nxmodule.nxQuery1.ToJSONObject);
-            Inc(LRowCount);
+            LReadResult.Free;
+            LReadResult := nil;
           end;
-          nxmodule.nxQuery1.Next;
-        end;
+          if Assigned(LReadRows) then
+          begin
+            LReadRows.Free;
+            LReadRows := nil;
+          end;
+          LOpenAttempted := False;
+          LReadOpened := False;
+          nxmodule.nxQuery1.Close;
+          try
+            // Drop bindings left over from an earlier statement: setting
+            // SQL.Text carries old values onto same-named params of the new
+            // statement.
+            nxmodule.nxQuery1.Params.Clear;
+            nxmodule.nxQuery1.SQL.Text := 'SELECT * FROM ' + AMetaTableName;
+            LOpenAttempted := True;
+            nxmodule.nxQuery1.Open;
+            LReadOpened := True;
 
-        Result.AddPair('metaTable', AMetaTableName);
-        Result.AddPair('available', TJSONBool.Create(True));
-        Result.AddPair('lockCount', TJSONNumber.Create(LRowCount));
-        Result.AddPair('truncated', TJSONBool.Create(LTruncated));
-        // Ownership of LRows transfers to Result here
-        Result.AddPair('locks', LRows);
-      except
-        LRows.Free;
-        raise;
-      end;
+            LReadResult := TJSONObject.Create;
+            LReadRows := TJSONArray.Create;
+            LRowCount := 0;
+            LTruncated := False;
+            LTableField := nxmodule.nxQuery1.FindField(cTableNameField);
+            // A filter we cannot apply would silently report "no locks", which
+            // reads like an all-clear. Say so instead.
+            if (ATableFilter <> '') and not Assigned(LTableField) then
+              raise Exception.Create(AMetaTableName + ' has no ' + cTableNameField +
+                ' column on this server; retry without tableName to see all locks.');
+
+            nxmodule.nxQuery1.First;
+            while not nxmodule.nxQuery1.Eof do
+            begin
+              LIncludeRow := ATableFilter = '';
+              if not LIncludeRow then
+                LIncludeRow := SameText(Trim(LTableField.AsString), ATableFilter);
+              if LIncludeRow then
+              begin
+                if LRowCount >= AMaxRows then
+                begin
+                  LTruncated := True;
+                  Break;
+                end;
+                LReadRows.AddElement(nxmodule.nxQuery1.ToJSONObject);
+                Inc(LRowCount);
+              end;
+              nxmodule.nxQuery1.Next;
+            end;
+
+            LReadResult.AddPair('metaTable', AMetaTableName);
+            LReadResult.AddPair('available', TJSONBool.Create(True));
+            LReadResult.AddPair('lockCount', TJSONNumber.Create(LRowCount));
+            LReadResult.AddPair('truncated', TJSONBool.Create(LTruncated));
+            // Ownership of LReadRows transfers to LReadResult here.
+            LReadResult.AddPair('locks', LReadRows);
+            LReadRows := nil;
+          finally
+            nxmodule.nxQuery1.Close;
+          end;
+        end,
+        procedure(E: Exception)
+        begin
+          // ExecuteWithReconnect calls this before retiring a poisoned session;
+          // do not carry objects made against the old cursor into the retry.
+          if Assigned(LReadResult) then
+          begin
+            LReadResult.Free;
+            LReadResult := nil;
+          end;
+          if Assigned(LReadRows) then
+          begin
+            LReadRows.Free;
+            LReadRows := nil;
+          end;
+        end);
     except
-      Result.Free;
-      raise;
+      on E: Exception do
+      begin
+        // Only an unknown meta table is reported gracefully. A filter-column
+        // problem, permission failure, dead connection, or other read error
+        // remains an error unless #META explicitly says the table is absent.
+        LReadError := E.Message;
+        if Assigned(LReadResult) then
+        begin
+          LReadResult.Free;
+          LReadResult := nil;
+        end;
+        if Assigned(LReadRows) then
+        begin
+          LReadRows.Free;
+          LReadRows := nil;
+        end;
+        if not LOpenAttempted or LReadOpened then
+          raise;
+        if ServerKnowsMetaTable(AMetaTableName) then
+          raise Exception.Create('Failed to read ' + AMetaTableName + ': ' + LReadError);
+
+        Result := TJSONObject.Create;
+        try
+          Result.AddPair('metaTable', AMetaTableName);
+          Result.AddPair('available', TJSONBool.Create(False));
+          Result.AddPair('message',
+            'This NexusDB server does not provide ' + AMetaTableName + '. The lock meta ' +
+            'tables were added in a later NexusDB release - upgrade the server (in ' +
+            'embedded mode: rebuild nxmcp against a newer NexusDB library) to inspect ' +
+            'locks. Lock conflicts are still reported in full detail in the error ' +
+            'message raised when a lock cannot be granted.');
+          Result.AddPair('serverError', LReadError);
+        except
+          Result.Free;
+          raise;
+        end;
+        Exit;
+      end;
     end;
+    Result := LReadResult;
+    LReadResult := nil;
   finally
-    nxmodule.nxQuery1.Close;
+    if Assigned(LReadResult) then
+    begin
+      LReadResult.Free;
+      LReadResult := nil;
+    end;
+    if Assigned(LReadRows) then
+    begin
+      LReadRows.Free;
+      LReadRows := nil;
+    end;
   end;
 end;
 

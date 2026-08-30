@@ -2,6 +2,46 @@
 
 Notable changes to nxmcp.
 
+## [6.0.0.0] - 2026-08-30
+
+Major version because concurrency and failure recovery now have an explicit execution and
+retry contract. Several operations that could previously be replayed after a lost connection
+are now deliberately no-retry.
+
+### Added
+
+* Added one process-wide, bounded execution gate around database-backed `tools/call` and
+  `resources/read`. The manager-level decorator automatically covers every current and future
+  tool/resource and shares the same gate across both capability types. Discovery methods,
+  `initialize`, and `ping` remain ungated.
+* Added `[Options] BusyTimeout=3000`, independent of the NexusDB operation `Timeout`. `0`
+  fails fast; a negative value logs a warning and uses 3000 ms. Expiry returns protocol-shaped
+  tool/resource error content rather than an unexplained JSON-RPC internal error.
+* Added deterministic concurrency tests with event-controlled fake capability managers. They
+  cover shared tool/resource exclusion, bounded waiting and release, discovery bypasses,
+  both busy-result shapes, filter-before-gate ordering, exception-safe release, both NexusDB
+  exception families, and cleanup after a retry itself fails.
+
+### Changed
+
+* NexusDB error classification now handles both `EnxDatabaseError` and `EnxBaseException`.
+  Communication loss and illegal re-entry retire the session and may retry once only at an
+  explicitly retry-enabled boundary. A general timeout is never retried: nxmcp best-effort
+  calls `CancelProcessing`, tears down the complete component chain, and reconnects while the
+  request still owns the execution gate.
+* DDL/restructure, table maintenance, password changes, transactional execution, and switch
+  state machines now use no-retry recovery. `batch_execute` distinguishes a confirmed
+  rollback from rollback-by-session-retirement and unknown transaction state instead of
+  unconditionally claiming success.
+* Cleanup/reconnect errors no longer replace the original operation error returned to the
+  caller. Switch rollback first retires a timeout/re-entered/lost session, then restores the
+  previous target.
+
+The production re-entry report and the key timeout/session-lock diagnosis came from Stephen
+Mott in [PR #3](https://github.com/drpfau/nxmcp/pull/3). This release reimplements that fix at
+the capability-manager boundary with bounded waiting and explicit replay policy instead of
+merging the pull request's per-tool base-class change.
+
 ## [5.1.0.0] - 2026-08-02
 
 ### Changed
