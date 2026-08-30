@@ -98,6 +98,26 @@ RootCertFile=
 
 ## Running
 
+### Restricted or portable environments
+
+During unit initialization, the NexusDB exception hook creates a per-executable
+application-data directory below
+`C:\ProgramData\NexusDB4\nxmcp\<encoded executable directory>`. Normal Windows
+permissions allow regular users to create this directory. A sandbox, hardened service
+account, or locked-down `ProgramData` ACL may not.
+
+In such an environment, point NexusDB at a writable application-data directory:
+
+```bat
+nxmcp.exe /CONFIG:"C:\path\to\writable\nxmcp-state"
+```
+
+This switch controls NexusDB's application-data and exception-log location. It does not
+move `nxmcp.ini`, which remains next to `nxmcp.exe`, and it does not change the configured
+database path. If the default directory cannot be created, startup can fail before nxmcp's
+own error handling runs, typically as runtime error 217 followed by an application-error
+dialog.
+
 ### HTTP Transport (default)
 
 ```
