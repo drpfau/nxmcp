@@ -48,6 +48,8 @@ AliasPath=
 ; Table passwords, comma separated (leave empty if not used)
 TablePassword=
 ; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead
+; Keep using the passwords above after switch_server to another server or to embedded mode (1=yes, 0=no)
+KeepTablePasswordsOnServerSwitch=0
 
 [Authentication]
 ; NexusDB username
