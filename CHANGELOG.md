@@ -2,6 +2,21 @@
 
 Notable changes to nxmcp.
 
+## [Unreleased]
+
+### Added
+
+* Added `[Database] KeepTablePasswordsOnServerSwitch` (default `0`). When `1`, the INI table
+  passwords (`TablePassword`, `TablePasswords1..N`) are also sent after `switch_server` to
+  another server or to embedded mode; a tool-supplied `tablePassword` is added on top.
+
+### Fixed
+
+* `switch_database` no longer drops the INI table passwords on the next reconnect, and
+  switching back to the INI-configured server reapplies them.
+* Re-adding a table password the session already holds no longer fails with
+  `DBIERR_NAMENOTUNIQUE`, and a password retired by a switch is removed from the session.
+
 ## [6.0.0.0] - 2026-08-30
 
 Major version because concurrency and failure recovery now have an explicit execution and

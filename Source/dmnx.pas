@@ -45,6 +45,13 @@ type
     FTablePassword: string;
     FTablePasswordIsCommaList: Boolean;
     FExtraTablePasswords: TArray<string>;
+    // INI-configured table passwords, kept so they can be reapplied after a switch.
+    FIniTablePassword: string;
+    FIniExtraTablePasswords: TArray<string>;
+    // Whether the INI passwords are in effect for the current connection.
+    FUseIniTablePasswords: Boolean;
+    // [Database] KeepTablePasswordsOnServerSwitch: keep the INI passwords on a non-default server.
+    FKeepIniTablePasswordsOnServerSwitch: Boolean;
     FUsername: string;
     FPassword: string;
     FAutoConnect: Boolean;
@@ -69,6 +76,7 @@ type
     procedure AddSessionPassword(const APassword: string);
     procedure ApplyPassword(const APassword: string; AIsCommaList: Boolean);
     procedure ApplyConfiguredPasswords;
+    procedure SetTablePasswords(const AToolPassword: string; AUseIni: Boolean);
     procedure WireServerEngine;
     function ConnectRemote: Boolean;
     function ConnectEmbedded: Boolean;
@@ -213,6 +221,8 @@ begin
   FTablePassword := '';
   FTablePasswordIsCommaList := True;
   FExtraTablePasswords := nil;
+  FUseIniTablePasswords := True;
+  FKeepIniTablePasswordsOnServerSwitch := False;
   FUsername := 'Administrator';
   FPassword := 'NexusDB';
   FAutoConnect := True;
@@ -263,6 +273,9 @@ begin
       Inc(LIndex);
       LKey := 'TablePasswords' + IntToStr(LIndex);
     end;
+    FIniTablePassword := FTablePassword;
+    FIniExtraTablePasswords := FExtraTablePasswords;
+    FKeepIniTablePasswordsOnServerSwitch := LIniFile.ReadBool('Database', 'KeepTablePasswordsOnServerSwitch', FKeepIniTablePasswordsOnServerSwitch);
 
     // Authentication section
     FUsername := LIniFile.ReadString('Authentication', 'Username', FUsername);
@@ -380,6 +393,8 @@ begin
     LIniFile.WriteString('Database', '; Table passwords, comma separated (leave empty if not used)', '');
     LIniFile.WriteString('Database', 'TablePassword', '');
     LIniFile.WriteString('Database', '; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead', '');
+    LIniFile.WriteString('Database', '; Keep using the passwords above after switch_server to another server or to embedded mode (1=yes, 0=no)', '');
+    LIniFile.WriteBool('Database', 'KeepTablePasswordsOnServerSwitch', False);
 
     // Authentication section
     LIniFile.WriteString('Authentication', '; NexusDB username', '');
@@ -569,8 +584,9 @@ begin
   if APassword <> '' then
     // Native session call: no SQL string literal involved, so no escaping is needed.
     // Used exactly as given - no trimming, since a real password may have significant
-    // leading/trailing whitespace.
-    nxSession1.PasswordAdd(APassword);
+    // leading/trailing whitespace. PasswordAdd raises DBIERR_NAMENOTUNIQUE for a password
+    // the session already holds; PasswordAddEx ignores that, so reapplying the set is safe.
+    nxSession1.PasswordAddEx(APassword, True);
 end;
 
 procedure Tnxmodule.ApplyPassword(const APassword: string; AIsCommaList: Boolean);
@@ -597,13 +613,37 @@ procedure Tnxmodule.ApplyConfiguredPasswords;
 var
   LExtraPassword: string;
 begin
-  // Table passwords are session-scoped (PasswordAdd is a session call), so every
+  // Table passwords are session-scoped (PasswordAddEx is a session call), so every
   // path that brings up a fresh session has to re-add the whole configured set:
   // the legacy comma-list TablePassword plus each verbatim TablePasswords1..N.
-  // Both connect paths (remote and embedded) share this.
+  // Both connect paths (remote and embedded) share this. A database switch keeps the
+  // session, so clear it first: a password retired by the switch must not stay usable.
+  nxSession1.PasswordRemoveAll;
   ApplyPassword(FTablePassword, FTablePasswordIsCommaList);
   for LExtraPassword in FExtraTablePasswords do
     AddSessionPassword(LExtraPassword);
+end;
+
+procedure Tnxmodule.SetTablePasswords(const AToolPassword: string; AUseIni: Boolean);
+begin
+  FUseIniTablePasswords := AUseIni;
+  if AUseIni then
+  begin
+    // INI passwords stay in effect; a tool-supplied password is added on top as a verbatim extra.
+    FTablePassword := FIniTablePassword;
+    FTablePasswordIsCommaList := True;
+    FExtraTablePasswords := FIniExtraTablePasswords;
+    if AToolPassword <> '' then
+      FExtraTablePasswords := FExtraTablePasswords + [AToolPassword];
+  end
+  else
+  begin
+    // A tool-supplied password is a single atomic value, never split on comma,
+    // since a real password may legitimately contain one.
+    FTablePassword := AToolPassword;
+    FTablePasswordIsCommaList := False;
+    FExtraTablePasswords := nil;
+  end;
 end;
 
 function Tnxmodule.Connect: Boolean;
@@ -914,12 +954,10 @@ begin
     if not nxDatabase1.Connected then
       nxDatabase1.Open;
 
-    // The session survives a plain database switch, so the TablePasswords1..N
-    // extras added at connect time are still registered on it - only the
-    // (possibly just-changed) primary password needs reapplying here. The
-    // session-was-dropped path above exits via Connect, which re-adds all of them.
+    // The session survives a plain database switch, but the configured set may have
+    // changed (a tool-supplied password can be an extra), so reapply all of them.
     if nxDatabase1.Connected then
-      ApplyPassword(FTablePassword, FTablePasswordIsCommaList);
+      ApplyConfiguredPasswords;
 
     Result := nxDatabase1.Connected;
   except
@@ -1047,6 +1085,7 @@ var
   LOldPath: string;
   LOldPassword: string;
   LOldPasswordIsCommaList: Boolean;
+  LOldExtraPasswords: TArray<string>;
   LTargetDesc: string;
   LFailure: string;
 begin
@@ -1086,6 +1125,7 @@ begin
   LOldPath := FAliasPath;
   LOldPassword := FTablePassword;
   LOldPasswordIsCommaList := FTablePasswordIsCommaList;
+  LOldExtraPasswords := FExtraTablePasswords;
 
   try
     // Release datasets and close the database. Degrades to a ForceDisconnect if
@@ -1106,10 +1146,8 @@ begin
       FAliasName := AAliasName;
       FAliasPath := '';
     end;
-    // A tool-supplied password is a single atomic value, never split on comma,
-    // since a real password may legitimately contain one.
-    FTablePassword := ATablePassword;
-    FTablePasswordIsCommaList := False;
+    // Same server, so the INI passwords stay in effect if they currently are.
+    SetTablePasswords(ATablePassword, FUseIniTablePasswords);
 
     // Reopen on the new target (reapplies the table password)
     if not OpenTargetDatabase then
@@ -1133,6 +1171,7 @@ begin
         FAliasPath := LOldPath;
         FTablePassword := LOldPassword;
         FTablePasswordIsCommaList := LOldPasswordIsCommaList;
+        FExtraTablePasswords := LOldExtraPasswords;
         if LOldPath <> '' then
           nxDatabase1.AliasPath := LOldPath
         else
@@ -1192,6 +1231,7 @@ var
   LOldPassword: string;
   LOldPasswordIsCommaList: Boolean;
   LOldExtraPasswords: TArray<string>;
+  LOldUseIniPasswords: Boolean;
   LFailure: string;
 begin
   GLastError := '';
@@ -1221,6 +1261,7 @@ begin
   LOldPassword := FTablePassword;
   LOldPasswordIsCommaList := FTablePasswordIsCommaList;
   LOldExtraPasswords := FExtraTablePasswords;
+  LOldUseIniPasswords := FUseIniTablePasswords;
 
   try
     // Full teardown (database -> session -> engines -> transport). Never call
@@ -1253,12 +1294,11 @@ begin
       FAliasPath := '';
     end;
 
-    // Update table password. A tool-supplied password is a single atomic value, never split
-    // on comma. The locally-configured extra passwords are not carried over to a different
-    // server unless explicitly supplied here, same as the legacy TablePassword above.
-    FTablePassword := ATablePassword;
-    FTablePasswordIsCommaList := False;
-    FExtraTablePasswords := nil;
+    // Update table passwords. The INI passwords belong to the INI-configured server: they are kept
+    // when switching back to it (same host and port), and only sent to another server when
+    // KeepTablePasswordsOnServerSwitch is enabled.
+    SetTablePasswords(ATablePassword, FKeepIniTablePasswordsOnServerSwitch or
+      ((FDefaultServerMode = smRemote) and SameText(AServerHost, FDefaultServerHost) and (AServerPort = FDefaultServerPort)));
 
     // Full reconnect (transport -> engine -> session -> database + password)
     if not Connect then
@@ -1284,6 +1324,7 @@ begin
         FTablePassword := LOldPassword;
         FTablePasswordIsCommaList := LOldPasswordIsCommaList;
         FExtraTablePasswords := LOldExtraPasswords;
+        FUseIniTablePasswords := LOldUseIniPasswords;
         nxWinsockTransport1.ServerName := LOldHost;
         nxWinsockTransport1.Port := LOldPort;
         if LOldPath <> '' then
@@ -1316,6 +1357,7 @@ var
   LOldPassword: string;
   LOldPasswordIsCommaList: Boolean;
   LOldExtraPasswords: TArray<string>;
+  LOldUseIniPasswords: Boolean;
   LFailure: string;
 begin
   GLastError := '';
@@ -1355,6 +1397,7 @@ begin
   LOldPassword := FTablePassword;
   LOldPasswordIsCommaList := FTablePasswordIsCommaList;
   LOldExtraPasswords := FExtraTablePasswords;
+  LOldUseIniPasswords := FUseIniTablePasswords;
 
   try
     // Full teardown (also deactivates the remote transport/engine). Tolerates a
@@ -1362,13 +1405,10 @@ begin
     DisconnectForSwitch;
 
     // Switch to the in-process engine with a direct database folder path.
-    // A tool-supplied password is a single atomic value, never split on comma.
-    // The locally-configured extra passwords are not carried over to a different
-    // server unless explicitly supplied here, same as switch_server.
+    // The INI passwords are only kept when embedded is the INI-configured mode or
+    // KeepTablePasswordsOnServerSwitch is enabled, same as switch_server.
     FServerMode := smEmbedded;
-    FTablePassword := ATablePassword;
-    FTablePasswordIsCommaList := False;
-    FExtraTablePasswords := nil;
+    SetTablePasswords(ATablePassword, FKeepIniTablePasswordsOnServerSwitch or (FDefaultServerMode = smEmbedded));
     nxDatabase1.AliasPath := AAliasPath;
     FAliasPath := nxDatabase1.AliasPath;  // component may normalize the path
     FAliasName := '';
@@ -1397,6 +1437,7 @@ begin
         FTablePassword := LOldPassword;
         FTablePasswordIsCommaList := LOldPasswordIsCommaList;
         FExtraTablePasswords := LOldExtraPasswords;
+        FUseIniTablePasswords := LOldUseIniPasswords;
         nxWinsockTransport1.ServerName := LOldHost;
         nxWinsockTransport1.Port := LOldPort;
         if LOldPath <> '' then
