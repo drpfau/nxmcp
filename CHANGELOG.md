@@ -2,6 +2,15 @@
 
 Notable changes to nxmcp.
 
+## [Unreleased]
+
+### Fixed
+
+* `initialize` advertised no `tools`/`resources` capability with Delphi-MCP-Server `40767eb`,
+  so clients such as Claude Code listed no tools. The library now builds capabilities only
+  from managers implementing `IMCPCapabilityProvider`; the filter and serialization wrappers
+  now forward it to the wrapped manager.
+
 ## [6.0.0.0] - 2026-08-30
 
 Major version because concurrency and failure recovery now have an explicit execution and

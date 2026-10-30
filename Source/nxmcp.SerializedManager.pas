@@ -51,7 +51,7 @@ type
     procedure Leave;
   end;
 
-  TnxSerializedManager = class(TInterfacedObject, IMCPCapabilityManager)
+  TnxSerializedManager = class(TInterfacedObject, IMCPCapabilityManager, IMCPCapabilityProvider)
   private
     FInner: IMCPCapabilityManager;
     FGate: INxExecutionGate;
@@ -73,6 +73,7 @@ type
     function HandlesMethod(const Method: string): Boolean;
     function ExecuteMethod(const Method: string;
       const Params: TJSONObject): TValue;
+    procedure DescribeCapabilities(const Capabilities: TJSONObject; Era: TMCPProtocolEra);
   end;
 
 function CreateExecutionGate: INxExecutionGate;
@@ -186,6 +187,16 @@ end;
 function TnxSerializedManager.HandlesMethod(const Method: string): Boolean;
 begin
   Result := FInner.HandlesMethod(Method);
+end;
+
+procedure TnxSerializedManager.DescribeCapabilities(const Capabilities: TJSONObject; Era: TMCPProtocolEra);
+var
+  LProvider: IMCPCapabilityProvider;
+begin
+  // The library builds the initialize capabilities only from managers that implement
+  // IMCPCapabilityProvider, so a wrapper must pass it through or the capability disappears.
+  if Supports(FInner, IMCPCapabilityProvider, LProvider) then
+    LProvider.DescribeCapabilities(Capabilities, Era);
 end;
 
 function TnxSerializedManager.OperationDescription(

@@ -31,7 +31,7 @@ type
   ///    expected shape this raises rather than passing the full list through -
   ///    and even then the invoke layer above still refuses the call.
   /// </summary>
-  TnxFilteredManager = class(TInterfacedObject, IMCPCapabilityManager)
+  TnxFilteredManager = class(TInterfacedObject, IMCPCapabilityManager, IMCPCapabilityProvider)
   private
     FInner: IMCPCapabilityManager;
     FIsEnabled: TnxIsEnabledFunc;
@@ -51,6 +51,7 @@ type
     function GetCapabilityName: string;
     function HandlesMethod(const Method: string): Boolean;
     function ExecuteMethod(const Method: string; const Params: TJSONObject): TValue;
+    procedure DescribeCapabilities(const Capabilities: TJSONObject; Era: TMCPProtocolEra);
   end;
 
 /// <summary>
@@ -103,6 +104,16 @@ end;
 function TnxFilteredManager.GetCapabilityName: string;
 begin
   Result := FInner.GetCapabilityName;
+end;
+
+procedure TnxFilteredManager.DescribeCapabilities(const Capabilities: TJSONObject; Era: TMCPProtocolEra);
+var
+  LProvider: IMCPCapabilityProvider;
+begin
+  // The library builds the initialize capabilities only from managers that implement
+  // IMCPCapabilityProvider, so a wrapper must pass it through or the capability disappears.
+  if Supports(FInner, IMCPCapabilityProvider, LProvider) then
+    LProvider.DescribeCapabilities(Capabilities, Era);
 end;
 
 function TnxFilteredManager.HandlesMethod(const Method: string): Boolean;

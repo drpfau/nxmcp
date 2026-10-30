@@ -5,7 +5,7 @@ project files, so they are recorded here.
 
 | Library | Version used | Stock? |
 |---|---|---|
-| [Delphi-MCP-Server](https://github.com/GDKsoftware/Delphi-MCP-Server) | `4e98e3b` (2026-07-30) | yes |
+| [Delphi-MCP-Server](https://github.com/GDKsoftware/Delphi-MCP-Server) | `40767eb` (2026-10-20) | yes — needs TaurusTLS installed (`USE_TAURUS_TLS` is on by default) |
 | [dataset-serialize](https://github.com/viniciussanchez/dataset-serialize) | `1330615` (2025-11-17) | no — one patch, see below |
 | NexusDB | 4.75 (commercial) | yes |
 
