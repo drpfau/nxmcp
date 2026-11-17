@@ -216,6 +216,7 @@ Uses stdin/stdout for JSON-RPC communication. Required for Claude Desktop and ot
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `batch_execute` | Execute multiple SQL in one transaction | `statements` (JSON array), `snapshot?` |
+| `run_script` | **Opt-in** (off unless `[Tools] run_script=1`). Run a whole multi-statement script as ONE batch (`#temp` tables, variables and cursors live for the whole script) and return the last result set as typed JSON (`columns` + `rows` as arrays), or `rowsAffected`. Also `rolledBack` / `committed` / `openTransactionRolledBack` (a transaction the script left open), `staleTransactionRolledBack` (a leftover transaction found at entry was rolled back), `warning` (the tool's transaction ended during the script), `elapsedMs`. Errors return `success: false` with the full NexusDB message, `errorCode`, `rolledBack`, and when relevant `rollbackError` / `hint` / `transactionState: "sessionRetired"` (connection lost, timeout or re-entry; the server discarded the transaction) / `commitOutcome: "unknown"` (lost during the commit itself - check before re-running) | `sql`, `transaction?` (`rollback` default / `commit` / `none`), `params?`, `timeoutMs?`, `maxRows?` (default 1000), `blobFormat?` (`base64`/`md5`) |
 
 ### Utility
 
@@ -267,6 +268,9 @@ off, so an absent entry - or a tool added by a later version - is simply availab
 existing ini files keep working untouched. A freshly generated `nxmcp.ini` lists every
 registered tool set to `1`, as a starting point to edit.
 
+The one exception is **`run_script`**, which runs whole writable scripts: it is off unless
+the ini sets `run_script=1` explicitly (a generated ini writes it as `0`).
+
 This is the low-effort way to narrow nxmcp to what a given deployment should be allowed to
 do, without maintaining a fork.
 
@@ -282,6 +286,7 @@ database, by design. What each individual tool promises, however, is enforced.
 | `get_table_data`, `get_table_schema` | Read-only, confined to the exact table named. |
 | `insert_record`, `update_records`, `delete_records`, `drop_index` | Confined to the table named; the operation cannot be redirected elsewhere. |
 | `execute_sql`, `batch_execute` | **Unrestricted by design** - any statement, including DDL. No guarantees are made or enforced. |
+| `run_script` | **Unrestricted, opt-in** - any number of statements as one batch. Off unless `[Tools] run_script=1`. Rolled back by default; `transaction="commit"` keeps the changes; the tool never commits after an error. Scripts that mention `AUTOCOMMITONDDL` anywhere (the option commits before each DDL; the check is textual, so a comment counts too) are refused in `rollback`/`commit` mode, and the option is forced off for the script there. |
 
 Two things make those contracts hold:
 

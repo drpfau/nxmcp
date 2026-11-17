@@ -14,6 +14,18 @@ Notable changes to nxmcp.
 * `initialize` now returns `instructions` for the AI client: NexusDB typed literals and
   `params`, the result date format, which tool to use for what, dialect specifics and the
   one-session gate. `[Server] Instructions` in `nxmcp.ini` replaces the built-in text.
+* Added `run_script`: runs a complete multi-statement script as one batch (so `#temp`
+  tables, variables and cursors live for the whole script) and returns the last result set
+  as typed JSON - `columns` (name, type) plus `rows` as arrays in column order, ISO 8601
+  dates, numbers as numbers, BLOBs as base64 or `{bytes, md5}` - or `rowsAffected`.
+  `transaction` is `rollback` (default, always rolled back), `commit` or `none` (for DDL);
+  transactions the script leaves open are always rolled back, and nothing is committed
+  after an error. Scripts using `AUTOCOMMITONDDL` (commits before each DDL) are refused in
+  `rollback`/`commit` mode. Errors raised by the script are returned as
+  `{"success": false, "error": "...", "errorCode": n, "rolledBack": bool}` with the full NexusDB message;
+  invalid parameters are tool errors. `execute_query` keeps its single-read guard unchanged.
+* Opt-in tools: `run_script` is disabled unless `[Tools] run_script=1` is set explicitly;
+  a generated ini writes it as `0`. Every other tool keeps the "absent means enabled" rule.
 
 ### Fixed
 
