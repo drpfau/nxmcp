@@ -113,7 +113,7 @@ type
       const AAliasPath: string = ''): Boolean;
     function SwitchToEmbedded(const AAliasPath: string;
       const ATablePassword: string = ''): Boolean;
-    /// <summary>True unless [Tools] ToolName=0 is present in the ini.</summary>
+    /// <summary>True unless [Tools] ToolName=0 is present in the ini; opt-in tools (cOptInTools) need ToolName=1.</summary>
     function IsToolEnabled(const AToolName: string): Boolean;
     /// <summary>True unless [Resources] URI=0 is present in the ini.</summary>
     function IsResourceEnabled(const AResourceURI: string): Boolean;
@@ -133,6 +133,11 @@ type
     property TablePassword: string read FTablePassword;
     property BusyTimeout: Integer read FBusyTimeout;
   end;
+
+const
+  // Single spelling of the opt-in tool's name: the tool registers under it and cOptInTools keys the
+  // disabled default on it, so a rename cannot silently turn the default into "enabled".
+  cRunScriptToolName = 'run_script';
 
 var
   nxmodule: Tnxmodule;
@@ -160,6 +165,10 @@ uses
 
 var
   GLastError: string;
+
+const
+  // Tools that are disabled unless the ini sets [Tools] Name=1 explicitly.
+  cOptInTools: array[0..0] of string = (cRunScriptToolName);
 
 /// <summary>
 /// Append a restart hint when the in-process engine is in the unrecoverable
@@ -292,6 +301,16 @@ begin
   LogDisabled('resource', FResourceSwitches);
 end;
 
+function IsOptInTool(const AToolName: string): Boolean;
+var
+  LName: string;
+begin
+  for LName in cOptInTools do
+    if SameText(LName, AToolName) then
+      Exit(True);
+  Result := False;
+end;
+
 procedure Tnxmodule.LoadSwitches(AIni: TMemIniFile; const ASection: string;
   ADest: TDictionary<string, Boolean>);
 var
@@ -311,7 +330,9 @@ begin
       // rest of this ini uses); they are not switches.
       if LName.StartsWith(';') then
         Continue;
-      ADest.AddOrSetValue(LowerCase(LName), AIni.ReadBool(ASection, LName, True));
+      // ReadBool returns the default for an empty or non-numeric value, so an opt-in tool
+      // must fall back to disabled: "run_script=" must not switch it on.
+      ADest.AddOrSetValue(LowerCase(LName), AIni.ReadBool(ASection, LName, not (SameText(ASection, 'Tools') and IsOptInTool(LName))));
     end;
   finally
     LNames.Free;
@@ -340,9 +361,10 @@ end;
 function Tnxmodule.IsToolEnabled(const AToolName: string): Boolean;
 begin
   // Unknown entries default to enabled - a tool added later is available without
-  // anyone having to touch an existing ini.
+  // anyone having to touch an existing ini. Opt-in tools (they can write without
+  // any guard) are the exception: they need an explicit [Tools] Name=1.
   if not FToolSwitches.TryGetValue(LowerCase(AToolName), Result) then
-    Result := True;
+    Result := not IsOptInTool(AToolName);
 end;
 
 function Tnxmodule.IsResourceEnabled(const AResourceURI: string): Boolean;
@@ -423,14 +445,15 @@ begin
     LIniFile.WriteString('SSL', 'KeyFile', '');
     LIniFile.WriteString('SSL', 'RootCertFile', '');
 
-    // Tools / Resources sections - every entry written as 1 (available). The list
+    // Tools / Resources sections - every entry written as 1 (available), opt-in tools as 0. The list
     // comes from TMCPRegistry rather than a hard-coded table here: the tool units
     // register themselves in their initialization sections, which run before this,
     // so a newly added tool turns up in a freshly generated ini automatically.
     LIniFile.WriteString('Tools', '; Set a tool to 0 to hide it: it is then not listed and cannot be called', '');
     LIniFile.WriteString('Tools', '; Anything not listed here is available - new tools need no ini change', '');
+    LIniFile.WriteString('Tools', '; except run_script, which runs whole writable SQL scripts: it is off unless set to 1', '');
     for LName in TMCPRegistry.GetToolNames do
-      LIniFile.WriteBool('Tools', LName, True);
+      LIniFile.WriteBool('Tools', LName, not IsOptInTool(LName));
 
     LIniFile.WriteString('Resources', '; Set a resource URI to 0 to hide it', '');
     for LName in TMCPRegistry.GetResourceURIs do

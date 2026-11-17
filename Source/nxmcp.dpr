@@ -40,6 +40,7 @@ uses
   nxmcp.Resource.Tables in 'nxmcp.Resource.Tables.pas',
   nxmcp.Resource.Schema in 'nxmcp.Resource.Schema.pas',
   nxmcp.Tool.ExecuteQuery in 'nxmcp.Tool.ExecuteQuery.pas',
+  nxmcp.Tool.RunScript in 'nxmcp.Tool.RunScript.pas',
   nxmcp.Tool.GetTableSchema in 'nxmcp.Tool.GetTableSchema.pas',
   // Phase 3 - Data Manipulation
   nxmcp.Tool.ExecuteSQL in 'nxmcp.Tool.ExecuteSQL.pas',
@@ -205,7 +206,8 @@ begin
   ManagerRegistry.RegisterManager(CoreManager);
   LExecutionGate := CreateExecutionGate;
   // Wrapped so that anything switched off in [Tools] / [Resources] is neither
-  // listed nor callable. Everything is on unless the ini says otherwise.
+  // listed nor callable. Everything is on unless the ini says otherwise, except the
+  // opt-in tools (dmnx cOptInTools), which are off unless the ini sets them to 1.
   ManagerRegistry.RegisterManager(
     FilterTools(SerializeTools(TMCPToolsManager.Create, LExecutionGate,
       Cardinal(nxmodule.BusyTimeout)),
