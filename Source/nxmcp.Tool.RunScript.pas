@@ -137,7 +137,9 @@ begin
     ftSmallint, ftInteger, ftWord, ftAutoInc, ftLargeint, ftShortint, ftByte, ftLongWord:
       Result := TJSONNumber.Create(AField.AsLargeInt);
     ftCurrency:
-      // Exact: Currency is a scaled Int64, routing it through Double would round large amounts.
+      // The Currency overload formats the scaled value itself (FloatToText fvCurrency, System.JSON), so
+      // serialization adds no rounding. The value is already a Double, though: TCurrencyField is a
+      // TFloatField and TField.GetAsCurrency is GetAsFloat (Data.DB), so ~15 significant digits.
       Result := TJSONNumber.Create(AField.AsCurrency);
     ftFloat, ftSingle, ftExtended:
       Result := TJSONNumber.Create(AField.AsFloat);
