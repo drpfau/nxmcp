@@ -20,6 +20,26 @@ uses
 /// </summary>
 function StripSwitches(const ASql: string): string;
 
+const
+  /// <summary>
+  /// Prefix for every statement nxmcp runs inside a transaction it reports on
+  /// (batch_execute, run_script in rollback/commit mode). With AUTOCOMMITONDDL on,
+  /// NexusDB commits the active transaction before each DDL statement and starts a
+  /// new one, so a later rollback undoes only part of the work while the tool would
+  /// claim the whole batch was rolled back. Options resolve from the statement
+  /// outwards, so this statement-scoped '0' also overrides a SESSION/DATABASE-level
+  /// '1' left by an earlier call; DDL then fails inside the transaction instead.
+  /// Side effect: an error position reported on line 1 is shifted by its length.
+  /// </summary>
+  cNoAutoCommitOnDDL = '#OPT::STATEMENT::AUTOCOMMITONDDL=''0'' ';
+
+/// <summary>
+/// True when ASql mentions AUTOCOMMITONDDL anywhere (textual, so a comment counts
+/// too). Callers that prefix cNoAutoCommitOnDDL refuse such SQL: a second, later
+/// option in the same statement could switch it back on.
+/// </summary>
+function MentionsAutoCommitOnDDL(const ASql: string): Boolean;
+
 type
   /// <summary>
   /// What a statement starts with, determined from its first meaningful token.
@@ -101,6 +121,11 @@ uses
   // engine's identifier validators, so nxmcp never has to re-guess either.
   nxSQLTok, CocoaBaseW,
   nxllUtils, nxllBde, nxllException, nxsdServerEngine;
+
+function MentionsAutoCommitOnDDL(const ASql: string): Boolean;
+begin
+  Result := Pos('AUTOCOMMITONDDL', UpperCase(ASql)) > 0;
+end;
 
 function StripSwitches(const ASql: string): string;
 var

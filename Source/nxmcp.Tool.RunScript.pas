@@ -78,6 +78,7 @@ uses
   MCPServer.Errors,
   nxmcp.NexusErrors,
   nxmcp.QueryParams,
+  nxmcp.SqlUtils,
   nxmcp.ToolAnnotations,
   dmnx;
 
@@ -89,7 +90,6 @@ const
   // Bound on the cleanup loop: each Rollback ends one nesting level, and a script that opened
   // more levels than this is not a realistic case - stop rather than spin on a failing server.
   cMaxRollbackLevels = 64;
-  cNoAutoCommitOnDDL = '#OPT::STATEMENT::AUTOCOMMITONDDL=''0'' ';
 
 function ParseTransactionMode(const AValue: string): TScriptTransactionMode;
 var
@@ -238,7 +238,7 @@ begin
                   'of the last statement. ' +
                   'RESULT FORMAT DIFFERS FROM execute_query: "columns" lists {name, type} and "rows" holds ' +
                   'one ARRAY per row, values in column order (not objects); column names are exactly as ' +
-                  'NexusDB returns them (not camelCased, duplicates kept); DATETIME is "YYYY-MM-DDTHH:NN:SS.ZZZ" ' +
+                  'NexusDB returns them (not camelCased; a repeated name gets a suffix, e.g. ID_2); DATETIME is "YYYY-MM-DDTHH:NN:SS.ZZZ" ' +
                   'without offset (wall clock), DATE "YYYY-MM-DD", TIME "HH:NN:SS.ZZZ"; numbers are JSON numbers; ' +
                   'BLOBs are base64 (or {bytes, md5} with blobFormat="md5"). Without a result set the answer ' +
                   'has rowsAffected instead. ' +
@@ -285,7 +285,7 @@ begin
   // a new one (verified: an INSERT before a CREATE TABLE survived "rollback" mode), which would make
   // rolledBack/committed a false claim. A bare COMMIT in the script cannot do this - NexusDB refuses
   // it with "No explicit transaction is currently in progress".
-  if (LMode <> stmNone) and (Pos('AUTOCOMMITONDDL', UpperCase(LSql)) > 0) then
+  if (LMode <> stmNone) and MentionsAutoCommitOnDDL(LSql) then
     raise Exception.Create('AUTOCOMMITONDDL commits the transaction before each DDL statement, so it ' +
       'cannot be used with transaction="' + cTransactionModeNames[LMode] + '". Use transaction="none".');
 

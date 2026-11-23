@@ -38,6 +38,11 @@ Notable changes to nxmcp.
 * `switch_database` and `switch_server` to the database that is already open ignored a
   `tablePassword` passed with them ("Already connected"). With a password they now reopen
   the same target and apply it; without one they remain a no-op.
+* `batch_execute` reported `transactionRolledBack: true` while statements before a DDL
+  statement stayed committed, when `AUTOCOMMITONDDL` had been switched on (e.g. at session
+  level by an earlier `execute_sql`): NexusDB commits before each DDL in that mode. Every
+  statement now runs with the option forced off, so DDL fails inside the transaction and the
+  whole batch is rolled back; statements that mention `AUTOCOMMITONDDL` are refused.
 * Re-adding a table password the session already holds no longer fails with
   `DBIERR_NAMENOTUNIQUE`, and a password retired by a switch is removed from the session.
 
