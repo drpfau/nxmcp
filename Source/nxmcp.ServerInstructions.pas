@@ -31,8 +31,10 @@ const
     'run_script runs a whole script as ONE batch (SELECT ... INTO #temp chains, variables,' + #10 +
     'cursors) and returns the last result set. The default transaction="rollback" undoes' + #10 +
     'everything; transaction="commit" keeps the changes. transaction="none" (needed for DDL)' + #10 +
-    'starts no transaction: what the script does persists, also when a later statement' + #10 +
-    'fails - it is never a dry run. Its result format differs from' + #10 +
+    'starts no transaction of its own, so it is never a dry run: work that runs outside a' + #10 +
+    'transaction (autocommitted) or that the script commits persists, also when a later' + #10 +
+    'statement fails. Only uncommitted work inside a transaction the script opens itself' + #10 +
+    'can still be rolled back. Its result format differs from' + #10 +
     'execute_query: rows are arrays in column order, column names are exactly as NexusDB' + #10 +
     'returns them (not camelCased), DATETIME has no offset. A failing script is a tool error' + #10 +
     'whose text is JSON with the exact NexusDB message in "error".' + #10 +

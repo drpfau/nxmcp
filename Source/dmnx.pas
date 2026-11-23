@@ -219,11 +219,72 @@ begin
   FreeAndNil(FResourceSwitches);
 end;
 
+/// <summary>
+/// Parses one host entry of [Database] TablePasswordServers (already trimmed and
+/// lower-cased): 'host' (any port, APort = 0), 'host:port', '[ipv6]', '[ipv6]:port', or
+/// a bare IPv6 address (several colons, no port). Fails closed: a port separator without
+/// a valid port (1..65535, digits only), anything else after a closing bracket, or an
+/// empty host makes the entry invalid - a typo must never widen 'host:port' to every
+/// port of that host.
+/// </summary>
+function TryParsePasswordServer(const AEntry: string; out AHost: string;
+  out APort: Integer): Boolean;
+
+  function TryPort(const AText: string; out APortValue: Integer): Boolean;
+  var
+    LChar: Char;
+  begin
+    Result := (AText <> '') and (Length(AText) <= 5);
+    if Result then
+      for LChar in AText do
+        if not CharInSet(LChar, ['0'..'9']) then
+          Exit(False);
+    Result := Result and TryStrToInt(AText, APortValue) and
+      (APortValue >= 1) and (APortValue <= 65535);
+  end;
+
+var
+  LSep: Integer;
+  LRest: string;
+begin
+  Result := False;
+  AHost := '';
+  APort := 0;
+  if AEntry.StartsWith('[') then
+  begin
+    LSep := Pos(']', AEntry);
+    if LSep <= 2 then
+      Exit;
+    AHost := Copy(AEntry, 2, LSep - 2);
+    LRest := Copy(AEntry, LSep + 1, MaxInt);
+    if LRest <> '' then
+    begin
+      if not LRest.StartsWith(':') then
+        Exit;
+      if not TryPort(Copy(LRest, 2, MaxInt), APort) then
+        Exit;
+    end;
+  end
+  else if AEntry.CountChar(':') = 1 then
+  begin
+    LSep := Pos(':', AEntry);
+    AHost := Copy(AEntry, 1, LSep - 1);
+    if not TryPort(Copy(AEntry, LSep + 1, MaxInt), APort) then
+      Exit;
+  end
+  else
+    AHost := AEntry;   // plain host, or a bare IPv6 address (no port possible)
+  Result := (AHost <> '') and not AHost.Contains(']') and not AHost.Contains('[');
+end;
+
 procedure Tnxmodule.LoadConfig;
 var
   LIniFile: TMemIniFile;
   LIndex: Integer;
   LKey: string;
+  LServerEntry: string;
+  LServerHost: string;
+  LServerPort: Integer;
 begin
   // Default values
   FServerMode := smRemote;
@@ -290,9 +351,20 @@ begin
     FIniExtraTablePasswords := FExtraTablePasswords;
     // Further switch_server targets that may receive the INI passwords. Empty (default):
     // only the INI-configured target. See IniPasswordsAllowedFor.
+    // An entry that does not parse is dropped with a warning (fail closed), never
+    // interpreted more broadly than written.
     for LKey in LIniFile.ReadString('Database', 'TablePasswordServers', '').Split([',']) do
-      if Trim(LKey) <> '' then
-        FTablePasswordServers := FTablePasswordServers + [LowerCase(Trim(LKey))];
+    begin
+      LServerEntry := LowerCase(Trim(LKey));
+      if LServerEntry = '' then
+        Continue;
+      if (LServerEntry = '*') or (LServerEntry = 'embedded') or
+         TryParsePasswordServer(LServerEntry, LServerHost, LServerPort) then
+        FTablePasswordServers := FTablePasswordServers + [LServerEntry]
+      else
+        TLogger.Warning('Ignoring invalid [Database] TablePasswordServers entry "' + LServerEntry +
+          '" (expected host, host:port, [ipv6]:port, embedded or *)');
+    end;
 
     // Authentication section
     FUsername := LIniFile.ReadString('Authentication', 'Username', FUsername);
@@ -676,8 +748,7 @@ function Tnxmodule.IniPasswordsAllowedFor(AMode: TnxServerMode; const AHost: str
 var
   LEntry: string;
   LHost: string;
-  LPortText: string;
-  LSep: Integer;
+  LPort: Integer;
 begin
   // The INI-configured target always gets the INI passwords (compared literally:
   // 'localhost' and '127.0.0.1' are different entries).
@@ -706,29 +777,10 @@ begin
     if LEntry = 'embedded' then
       Continue;
 
-    LHost := LEntry;
-    LPortText := '';
-    if LEntry.StartsWith('[') then
-    begin
-      // [IPv6]:port or [IPv6]
-      LSep := Pos(']', LEntry);
-      if LSep > 0 then
-      begin
-        LHost := Copy(LEntry, 2, LSep - 2);
-        if Copy(LEntry, LSep + 1, 1) = ':' then
-          LPortText := Copy(LEntry, LSep + 2, MaxInt);
-      end;
-    end
-    else if LEntry.CountChar(':') = 1 then
-    begin
-      // host:port (several colons without brackets: a bare IPv6 address, no port)
-      LSep := Pos(':', LEntry);
-      LHost := Copy(LEntry, 1, LSep - 1);
-      LPortText := Copy(LEntry, LSep + 1, MaxInt);
-    end;
-
-    if SameText(LHost, AHost) and
-       ((LPortText = '') or (StrToIntDef(LPortText, -1) = APort)) then
+    // Entries were validated at load time; re-parse and skip anything invalid anyway,
+    // so this check fails closed on its own.
+    if TryParsePasswordServer(LEntry, LHost, LPort) and SameText(LHost, AHost) and
+       ((LPort = 0) or (LPort = APort)) then
       Exit(True);
   end;
 end;

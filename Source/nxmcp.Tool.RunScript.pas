@@ -30,9 +30,10 @@ type
     [SchemaDescription('"rollback" (default): run inside a transaction that is always rolled back, also on ' +
       'error. "commit": run inside a transaction committed on success, rolled back on error. "none": no ' +
       'explicit transaction - needed for DDL (e.g. CREATE TABLE ##x), which NexusDB refuses inside a ' +
-      'transaction. In "none" mode whatever the script does persists, also when a later statement ' +
-      'fails: it is never a dry run. In every mode, transactions the script itself leaves open are ' +
-      'rolled back.')]
+      'transaction. "none" starts no transaction of its own, so it is never a dry run: work that runs ' +
+      'outside a transaction (autocommitted) or that the script commits persists, also when a later ' +
+      'statement fails; only uncommitted work inside a transaction the script opens itself can be ' +
+      'rolled back. In every mode, transactions the script itself leaves open are rolled back.')]
     property Transaction: string read FTransaction write FTransaction;
 
     [Optional]
@@ -246,7 +247,8 @@ begin
                   'has rowsAffected instead. ' +
                   'WRITES ARE ALLOWED. By default everything runs inside a transaction that is always ' +
                   'rolled back (transaction="rollback"); use "commit" to keep the changes. "none" (needed for DDL) ' +
-                  'starts no transaction, so its changes persist even if a later statement fails. ' +
+                  'starts no transaction of its own: autocommitted or committed work persists even if a later ' +
+                  'statement fails. ' +
                   'A failing script is a tool error (isError) whose text is the JSON object ' +
                   '{"success": false, "error": "...", "errorCode": n, "rolledBack": bool} with the full NexusDB message; ' +
                   'invalid parameters are plain tool errors. ' +
@@ -490,7 +492,7 @@ begin
           // A separate field, so the NexusDB message stays exactly as the server sent it.
           if (LMode <> stmNone) and ContainsText(E.Message, 'DDL statements cannot execute while a transaction is active') then
             LErrorObj.AddPair('hint', 'NexusDB refuses DDL (CREATE/DROP/ALTER, also on #temp tables) inside a ' +
-              'transaction. Use transaction="none" - its changes persist, it is not a dry run. ' +
+              'transaction. Use transaction="none" - it starts no transaction of its own, so it is not a dry run. ' +
               'SELECT ... INTO #temp is not DDL and works in every mode.')
           // In "none" mode, work the script ran outside a transaction, or had already committed,
           // stays. Uncommitted work inside a transaction the script opened itself (START

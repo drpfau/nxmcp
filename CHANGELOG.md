@@ -23,7 +23,8 @@ that clients act on.
 * `[Database] TablePasswordServers`: further `switch_server` targets that also receive the
   INI table passwords - `host:port`, `host` (any port), `embedded`, or `*` for any target.
   Empty by default, so the INI passwords still go only to the INI-configured server. For
-  installations with several NXservers serving copies of the same databases.
+  installations with several NXservers serving copies of the same databases. An entry that
+  does not parse (e.g. `dbhost:` or `dbhost:abc`) is ignored with a warning, never widened.
 * Added `run_script`: runs a complete multi-statement script as one batch (so `#temp`
   tables, variables and cursors live for the whole script) and returns the last result set
   as typed JSON - `columns` (name, type) plus `rows` as arrays in column order, ISO 8601
