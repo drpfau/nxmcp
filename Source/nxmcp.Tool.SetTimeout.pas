@@ -34,6 +34,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -43,6 +44,7 @@ constructor TSetTimeoutTool.Create;
 begin
   inherited;
   FName := 'set_timeout';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Set Database Timeout';
   FDescription := 'Set the timeout on the NexusDB database component. ' +
                   'Controls how long operations wait before timing out. ' +

@@ -37,6 +37,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdServerEngine,
@@ -51,6 +52,7 @@ constructor TDropColumnTool.Create;
 begin
   inherited;
   FName := 'drop_column';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Drop Column';
   FDescription := 'Remove a column from an existing table. WARNING: This permanently deletes the column and its data.';
 end;

@@ -37,6 +37,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.StrUtils,
   Data.DB,
   MCPServer.Registration,
@@ -49,6 +50,7 @@ constructor TExplainQueryTool.Create;
 begin
   inherited;
   FName := 'explain_query';
+  AnnotateTool(FAnnotations, tkAdditive);
   FTitle := 'Explain Query Plan';
   FDescription := 'Show the execution plan for a single SELECT, INSERT, UPDATE or DELETE. ' +
                   'NexusDB has no EXPLAIN - the optimizer only narrates its decisions while a ' +

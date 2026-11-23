@@ -33,6 +33,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdServerEngine,
   nxllException,
   nxsdTypes,
@@ -45,6 +46,7 @@ constructor TPackTableTool.Create;
 begin
   inherited;
   FName := 'pack_table';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Pack Table';
   FDescription := 'Compact a table to reclaim space from deleted records. Creates a new table and copies records over.';
 end;

@@ -36,6 +36,8 @@ uses
   nxmcp.SqlUtils in 'nxmcp.SqlUtils.pas',
   nxmcp.ValueFormat in 'nxmcp.ValueFormat.pas',
   nxmcp.QueryParams in 'nxmcp.QueryParams.pas',
+  nxmcp.ToolAnnotations in 'nxmcp.ToolAnnotations.pas',
+  nxmcp.ServerInstructions in 'nxmcp.ServerInstructions.pas',
   nxmcp.Resource.Server in 'nxmcp.Resource.Server.pas',
   nxmcp.Resource.Tables in 'nxmcp.Resource.Tables.pas',
   nxmcp.Resource.Schema in 'nxmcp.Resource.Schema.pas',
@@ -200,6 +202,9 @@ var
   LExecutionGate: INxExecutionGate;
 begin
   Settings := TMCPSettings.Create(nxmodule.GetConfigPath);
+  // Sent in the initialize result; [Server] Instructions in nxmcp.ini replaces it.
+  if Settings.Instructions = '' then
+    Settings.Instructions := cServerInstructions;
   ManagerRegistry := TMCPManagerRegistry.Create;
   CoreManager := TMCPCoreManager.Create(Settings);
   ManagerRegistry.RegisterManager(CoreManager);

@@ -35,6 +35,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdServerEngine,
@@ -49,6 +50,7 @@ constructor TSetIndexDescriptionTool.Create;
 begin
   inherited;
   FName := 'set_index_description';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Set Index Description';
   FDescription := 'Set or clear the description (comment) on an index. Pass an empty string to clear.';
 end;

@@ -33,6 +33,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxllTypes,
   MCPServer.Registration,
   dmnx;
@@ -43,6 +44,7 @@ constructor TGetAutoIncValueTool.Create;
 begin
   inherited;
   FName := 'get_autoinc_value';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'Get Auto-Increment Value';
   FDescription := 'Get the next auto-increment value for a table.';
 end;

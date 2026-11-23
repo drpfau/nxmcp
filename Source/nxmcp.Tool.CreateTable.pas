@@ -49,6 +49,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.Generics.Collections,
   Data.DB,
   nxsdTypes,
@@ -67,6 +68,7 @@ constructor TCreateTableTool.Create;
 begin
   inherited;
   FName := 'create_table';
+  AnnotateTool(FAnnotations, tkAdditive);
   FTitle := 'Create Table';
   FDescription := 'Create a new table with the specified columns. Each column may declare a type, size, ' +
     'required (NOT NULL) flag, description, and a default value. Pass column definitions as a JSON array.';

@@ -27,6 +27,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.Variants,
   nxsdTypes,
   nxsdDataDictionary,
@@ -46,6 +47,7 @@ constructor TGetTableSchemaTool.Create;
 begin
   inherited;
   FName := 'get_table_schema';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'Get Table Schema';
   FDescription := 'Get detailed schema information for a table from its data dictionary: columns (with descriptions, defaults, validators), indexes (with descriptions), table description, data policies, audit settings, and referential integrity references.';
 end;

@@ -28,6 +28,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.Classes,
   MCPServer.Registration,
   dmnx;
@@ -38,6 +39,7 @@ constructor TListAliasesTool.Create;
 begin
   inherited;
   FName := 'list_aliases';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'List Database Aliases';
   FDescription := 'List all available database aliases on the connected NexusDB server. ' +
                   'Shows the current active alias and the default alias from configuration. ' +

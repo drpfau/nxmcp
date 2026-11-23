@@ -37,6 +37,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   nxmcp.SqlUtils,
   dmnx;
@@ -47,6 +48,7 @@ constructor TDropIndexTool.Create;
 begin
   inherited;
   FName := 'drop_index';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Drop Index';
   FDescription := 'Remove an index from a table.';
 end;

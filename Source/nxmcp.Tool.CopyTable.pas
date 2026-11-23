@@ -42,6 +42,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxllException,
@@ -54,6 +55,7 @@ constructor TCopyTableTool.Create;
 begin
   inherited;
   FName := 'copy_table';
+  AnnotateTool(FAnnotations, tkAdditive);
   FTitle := 'Copy Table';
   FDescription := 'Copy a table structure to a new table. Optionally copy data as well.';
 end;

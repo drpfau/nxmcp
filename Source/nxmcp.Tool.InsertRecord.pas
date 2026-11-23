@@ -39,6 +39,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   System.Generics.Collections,
   nxsdTypes,
@@ -53,6 +54,7 @@ constructor TInsertRecordTool.Create;
 begin
   inherited;
   FName := 'insert_record';
+  AnnotateTool(FAnnotations, tkAdditive);
   FTitle := 'Insert Record';
   FDescription := 'Insert a new record into a table. Pass column values as a JSON object.';
 end;

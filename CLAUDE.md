@@ -110,6 +110,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `switch_database` | Switch the active database by `aliasName` **or** `aliasPath` (keeps session) |
 | `switch_server` | Switch server connection (full reconnect): `mode` remote/embedded; optional `aliasName`/`aliasPath` |
 
+### Tool Annotations and Server Instructions
+Every tool constructor calls `AnnotateTool(FAnnotations, <kind>)` (`nxmcp.ToolAnnotations.pas`), which sets all four MCP hints explicitly (`openWorldHint` is always false). Clients use them to auto-approve or parallelise calls, so they are a promise: **a new tool must pick a kind**, and `tkReadOnly` only when the tool changes nothing at all — data, schema, session or server state.
+
+| Kind | Hints | Tools |
+|------|-------|-------|
+| `tkReadOnly` | readOnly | `execute_query`, `get_table_data`, `get_table_schema`, `count_records`, `list_indexes`, `list_locks`, `list_aliases`, `get_autoinc_value`, `get_query_log` |
+| `tkAdditive` | not destructive, not idempotent | `insert_record`, `create_table`, `create_index`, `add_column`, `copy_table`, `rename_table`, `explain_query` (really executes writes, rolled back - locks, autoinc) |
+| `tkIdempotent` | not destructive, idempotent | `set_table/column/index_description`, `set_column_default`, `set_audit`, `reindex_table`, `close_inactive_tables`, `set_timeout`, `switch_database`, `switch_server` |
+| `tkDestructive` | destructive | `execute_sql`, `batch_execute`, `update_records`, `delete_records`, `drop_table/column/index`, `empty_table`, `modify_column`, `pack_table`, `recover_table`, `change_password`, `set_field_validator`, `set_data_policies` (the last two block later writes) |
+
+`nxmcp.ServerInstructions.pas` holds `cServerInstructions`, the text sent as `instructions` in the `initialize` result (set in `nxmcp.dpr` unless `[Server] Instructions` in `nxmcp.ini` overrides it). It repeats rules from this file for the AI client — typed literals, `params`, dialect specifics, the one-session gate. **When a tool's behaviour or one of those rules changes, update the text too.**
+
 ### Lock Inspection and Cache Release
 `list_locks` reads the two **reserved (virtual) meta tables** the server populates on demand: `#TABLE_LOCKS` (record/cursor-level locks — `LOCK_TYPE`, `REFNR`, `WAITING`) and `#TRANSACTION_LOCKS` (transaction-level — `LOCK_STATE`, `EXCLUSIVE`, `TRANSACTION_LEVEL`, `RUNNING_FOR`). Both are defined in `nxsqlProxies.pas` and were **added in a later NexusDB release**, so `list_locks` must not raise on an older server.
 

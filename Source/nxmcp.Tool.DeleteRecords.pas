@@ -37,6 +37,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   MCPServer.Registration,
   nxmcp.SqlUtils,
@@ -48,6 +49,7 @@ constructor TDeleteRecordsTool.Create;
 begin
   inherited;
   FName := 'delete_records';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Delete Records';
   FDescription := 'Delete records from a table matching the WHERE clause. WHERE clause is required for safety.';
 end;

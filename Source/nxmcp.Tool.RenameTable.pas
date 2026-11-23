@@ -37,6 +37,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -46,6 +47,7 @@ constructor TRenameTableTool.Create;
 begin
   inherited;
   FName := 'rename_table';
+  AnnotateTool(FAnnotations, tkAdditive);
   FTitle := 'Rename Table';
   FDescription := 'Rename an existing table.';
 end;

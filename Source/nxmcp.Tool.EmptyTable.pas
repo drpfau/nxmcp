@@ -33,6 +33,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -42,6 +43,7 @@ constructor TEmptyTableTool.Create;
 begin
   inherited;
   FName := 'empty_table';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Empty Table';
   FDescription := 'Delete all records from a table. WARNING: This permanently removes all data but keeps the table structure.';
 end;

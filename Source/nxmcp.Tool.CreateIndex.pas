@@ -46,6 +46,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.Classes,
   nxsdTypes,
   nxsdDataDictionary,
@@ -61,6 +62,7 @@ constructor TCreateIndexTool.Create;
 begin
   inherited;
   FName := 'create_index';
+  AnnotateTool(FAnnotations, tkAdditive);
   FTitle := 'Create Index';
   FDescription := 'Create an index on one or more columns of a table.';
 end;

@@ -45,6 +45,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   System.Generics.Collections,
   nxsdTypes,
@@ -59,6 +60,7 @@ constructor TUpdateRecordsTool.Create;
 begin
   inherited;
   FName := 'update_records';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Update Records';
   FDescription := 'Update records in a table matching the WHERE clause. Pass new values as a JSON object.';
 end;

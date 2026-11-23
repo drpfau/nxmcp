@@ -55,6 +55,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.Variants,
   nxsdTypes,
   nxsdDataDictionary,
@@ -70,6 +71,7 @@ constructor TSetFieldValidatorTool.Create;
 begin
   inherited;
   FName := 'set_field_validator';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Set Field Validator';
   FDescription := 'Add, replace, or remove a server-side validator on a column. Supports MinMax (range bounds) and NoChange (immutable after insert). Use validator=none to remove any existing validator.';
 end;

@@ -35,6 +35,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdServerEngine,
@@ -49,6 +50,7 @@ constructor TSetColumnDescriptionTool.Create;
 begin
   inherited;
   FName := 'set_column_description';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Set Column Description';
   FDescription := 'Set or clear the description (comment) on a column. Pass an empty string to clear.';
 end;

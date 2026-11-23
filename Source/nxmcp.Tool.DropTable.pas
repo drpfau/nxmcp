@@ -33,6 +33,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -42,6 +43,7 @@ constructor TDropTableTool.Create;
 begin
   inherited;
   FName := 'drop_table';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Drop Table';
   FDescription := 'Delete a table from the database. WARNING: This permanently removes the table and all its data.';
 end;

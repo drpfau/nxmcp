@@ -37,6 +37,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdServerEngine,
   nxllException,
   nxsdTypes,
@@ -49,6 +50,7 @@ constructor TReindexTableTool.Create;
 begin
   inherited;
   FName := 'reindex_table';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Reindex Table';
   FDescription := 'Rebuild an index on a table. Use this to repair or optimize an index.';
 end;

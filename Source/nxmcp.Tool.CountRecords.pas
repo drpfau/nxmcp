@@ -34,6 +34,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   MCPServer.Registration,
   dmnx;
@@ -44,6 +45,7 @@ constructor TCountRecordsTool.Create;
 begin
   inherited;
   FName := 'count_records';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'Count Table Records';
   FDescription := 'Get the record count for a table. Uses NexusDB table metadata for efficient ' +
                   'counting without scanning rows. Much faster than SELECT COUNT(*).';

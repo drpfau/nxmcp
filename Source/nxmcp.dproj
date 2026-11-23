@@ -94,6 +94,8 @@
         <DCCReference Include="nxmcp.SqlUtils.pas"/>
         <DCCReference Include="nxmcp.ValueFormat.pas"/>
         <DCCReference Include="nxmcp.QueryParams.pas"/>
+        <DCCReference Include="nxmcp.ToolAnnotations.pas"/>
+        <DCCReference Include="nxmcp.ServerInstructions.pas"/>
         <DCCReference Include="nxmcp.Resource.Server.pas"/>
         <DCCReference Include="nxmcp.Resource.Tables.pas"/>
         <DCCReference Include="nxmcp.Resource.Schema.pas"/>

@@ -81,6 +81,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdTableMapperDescriptor,
@@ -97,6 +98,7 @@ constructor TAddColumnTool.Create;
 begin
   inherited;
   FName := 'add_column';
+  AnnotateTool(FAnnotations, tkAdditive);
   FTitle := 'Add Column';
   FDescription := 'Add a new column to an existing table. Optionally set required (NOT NULL), a description, and a default value.';
 end;

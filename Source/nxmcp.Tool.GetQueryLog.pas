@@ -29,6 +29,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -38,6 +39,7 @@ constructor TGetQueryLogTool.Create;
 begin
   inherited;
   FName := 'get_query_log';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'Get Query Log';
   FDescription := 'Return the query log from the most recent query execution. ' +
                   'The log is populated by NexusDB even if the query failed (e.g. timeout). ' +

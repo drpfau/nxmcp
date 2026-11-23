@@ -60,6 +60,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdServerEngine,
@@ -75,6 +76,7 @@ constructor TSetColumnDefaultTool.Create;
 begin
   inherited;
   FName := 'set_column_default';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Set Column Default';
   FDescription := 'Add, replace, or remove the default-value descriptor on an existing column. Supports CurrentDateTime, CurrentUser, and Constant defaults; use defaultType=none to remove.';
 end;

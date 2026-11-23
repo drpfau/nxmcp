@@ -63,6 +63,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -72,6 +73,7 @@ constructor TSwitchServerTool.Create;
 begin
   inherited;
   FName := 'switch_server';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Switch Server';
   FDescription := 'Switch the NexusDB server connection. mode="remote" (default) connects to ' +
                   'an NXserver; mode="embedded" runs an in-process local NexusDB server. ' +

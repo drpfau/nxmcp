@@ -42,6 +42,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdDataDictionaryAudit,
@@ -58,6 +59,7 @@ constructor TSetAuditTool.Create;
 begin
   inherited;
   FName := 'set_audit';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Set Audit Settings';
   FDescription := 'Enable/disable audit-trail logging on a table and configure whether BLOB field changes are recorded. Pass clear=true to remove the audit descriptor entirely.';
 end;

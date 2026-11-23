@@ -49,6 +49,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   DataSet.Serialize,
   MCPServer.Registration,
@@ -61,6 +62,7 @@ constructor TGetTableDataTool.Create;
 begin
   inherited;
   FName := 'get_table_data';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'Get Table Data';
   FDescription := 'Retrieve data from a table with pagination support. Returns rows as JSON array.';
 end;

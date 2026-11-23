@@ -48,6 +48,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.Generics.Collections,
   Data.DB,
   DataSet.Serialize,
@@ -61,6 +62,7 @@ constructor TBatchExecuteTool.Create;
 begin
   inherited;
   FName := 'batch_execute';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Batch Execute SQL';
   FDescription := 'Execute multiple SQL statements in a single transaction. ' +
                   'Supports SELECT, INSERT, UPDATE, DELETE. All statements succeed together or all are rolled back. ' +

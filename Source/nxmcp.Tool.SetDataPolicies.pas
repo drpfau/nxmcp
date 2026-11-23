@@ -57,6 +57,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdDataDictionaryDataPolicies,
@@ -73,6 +74,7 @@ constructor TSetDataPoliciesTool.Create;
 begin
   inherited;
   FName := 'set_data_policies';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Set Data Policies';
   FDescription := 'Configure table-level data policies: deny insert/modify/delete and enforce min/max record counts. Pass clear=true to remove the policy descriptor entirely.';
 end;

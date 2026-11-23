@@ -4,6 +4,17 @@ Notable changes to nxmcp.
 
 ## [Unreleased]
 
+### Added
+
+* Tool annotations: every tool now states `readOnlyHint`, `destructiveHint`,
+  `idempotentHint` and `openWorldHint` in `tools/list`, so clients can auto-approve or
+  parallelise the 9 read-only tools and ask before the 14 destructive ones (see CLAUDE.md
+  for the full classification). Without annotations the spec treats every tool as a
+  possibly destructive write.
+* `initialize` now returns `instructions` for the AI client: NexusDB typed literals and
+  `params`, the result date format, which tool to use for what, dialect specifics and the
+  one-session gate. `[Server] Instructions` in `nxmcp.ini` replaces the built-in text.
+
 ### Fixed
 
 * `initialize` advertised no `tools`/`resources` capability with Delphi-MCP-Server `40767eb`,

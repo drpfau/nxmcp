@@ -52,6 +52,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   System.Math,
   Data.DB,
   DataSet.Serialize,
@@ -74,6 +75,7 @@ constructor TListLocksTool.Create;
 begin
   inherited;
   FName := 'list_locks';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'List Locks';
   FDescription := 'Report the live lock state of the NexusDB server from its lock meta tables: ' +
                   '#TABLE_LOCKS (record and cursor level locks - table, lock type, record ' +

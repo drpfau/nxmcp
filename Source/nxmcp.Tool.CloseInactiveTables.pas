@@ -29,6 +29,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -38,6 +39,7 @@ constructor TCloseInactiveTablesTool.Create;
 begin
   inherited;
   FName := 'close_inactive_tables';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Close Inactive Tables and Folders';
   FDescription := 'Release the tables and folders that the NexusDB server keeps open in its cache ' +
                   'for this session (TnxSession.CloseInactiveTables + CloseInactiveFolders). ' +

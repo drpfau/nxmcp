@@ -41,6 +41,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxllException,
   MCPServer.Registration,
   dmnx;
@@ -51,6 +52,7 @@ constructor TChangePasswordTool.Create;
 begin
   inherited;
   FName := 'change_password';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Change Table Password';
   FDescription := 'Change the password of a table. Use empty string to remove password protection.';
 end;

@@ -74,6 +74,8 @@ Host=localhost
 Name=nxmcp
 Version=6.0.0.0
 Endpoint=/mcp
+; Optional: replaces the built-in NexusDB hints sent to clients in "instructions"
+;Instructions=
 
 [CORS]
 ; Cross-Origin Resource Sharing configuration

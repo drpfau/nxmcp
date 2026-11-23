@@ -53,6 +53,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   MCPServer.Registration,
   nxmcp.SqlUtils,
@@ -65,6 +66,7 @@ constructor TExecuteSQLTool.Create;
 begin
   inherited;
   FName := 'execute_sql';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Execute SQL Statement';
   FDescription := 'Execute a SQL statement (INSERT, UPDATE, DELETE) against the NexusDB database. ' +
                   'Returns the number of rows affected. For SELECT queries, use execute_query instead. ' +

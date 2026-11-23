@@ -58,6 +58,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdServerEngine,
@@ -74,6 +75,7 @@ constructor TModifyColumnTool.Create;
 begin
   inherited;
   FName := 'modify_column';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Modify Column';
   FDescription := 'Modify a column in an existing table. Can change type, size, or rename the column.';
 end;

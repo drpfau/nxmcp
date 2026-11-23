@@ -47,6 +47,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   MCPServer.Registration,
   dmnx;
 
@@ -56,6 +57,7 @@ constructor TSwitchDatabaseTool.Create;
 begin
   inherited;
   FName := 'switch_database';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Switch Database';
   FDescription := 'Switch the active database on the NexusDB server. ' +
                   'Provide EITHER aliasName (a server-configured alias) OR aliasPath ' +

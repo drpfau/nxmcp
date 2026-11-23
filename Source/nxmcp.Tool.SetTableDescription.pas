@@ -31,6 +31,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdTypes,
   nxsdDataDictionary,
   nxsdServerEngine,
@@ -45,6 +46,7 @@ constructor TSetTableDescriptionTool.Create;
 begin
   inherited;
   FName := 'set_table_description';
+  AnnotateTool(FAnnotations, tkIdempotent);
   FTitle := 'Set Table Description';
   FDescription := 'Set or clear the description (comment) on a table. Pass an empty string to clear.';
 end;

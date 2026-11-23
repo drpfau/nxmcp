@@ -33,6 +33,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   DataSet.Serialize,
   nxsdTypes,
@@ -50,6 +51,7 @@ constructor TListIndexesTool.Create;
 begin
   inherited;
   FName := 'list_indexes';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'List Table Indexes';
   FDescription := 'List all indexes defined on a table, including name, uniqueness, and whether it is the default index.';
 end;

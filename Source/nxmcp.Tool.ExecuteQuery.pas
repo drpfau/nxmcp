@@ -58,6 +58,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   Data.DB,
   DataSet.Serialize,
   MCPServer.Registration,
@@ -71,6 +72,7 @@ constructor TExecuteQueryTool.Create;
 begin
   inherited;
   FName := 'execute_query';
+  AnnotateTool(FAnnotations, tkReadOnly);
   FTitle := 'Execute SQL Query';
   FDescription := 'Execute a single SQL SELECT query against the NexusDB database and return ' +
                   'results as JSON. Strictly read-only: exactly one statement (no second ' +

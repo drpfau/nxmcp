@@ -33,6 +33,7 @@ type
 implementation
 
 uses
+  nxmcp.ToolAnnotations,
   nxsdServerEngine,
   nxllException,
   nxsdTypes,
@@ -45,6 +46,7 @@ constructor TRecoverTableTool.Create;
 begin
   inherited;
   FName := 'recover_table';
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Recover Table';
   FDescription := 'Attempt to recover records from a broken/corrupted table. Recovered records are placed in TableName_Recovered, unrecoverable records in TableName_Failed.';
 end;
