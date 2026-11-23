@@ -11,6 +11,14 @@ Notable changes to nxmcp.
   from managers implementing `IMCPCapabilityProvider`; the filter and serialization wrappers
   now forward it to the wrapped manager.
 
+### Changed
+
+* Built against Delphi-MCP-Server `f950352`. The library path now also needs `src` and
+  `src\Prompts` (see DEPENDENCIES.md). Visible effects of the library update: non-ASCII
+  text over stdio is no longer mangled, `Host=localhost` binds to loopback only, the
+  `Origin` header is checked on every HTTP request, and the library adds a
+  `server://status` resource.
+
 ## [6.0.0.0] - 2026-08-30
 
 Major version because concurrency and failure recovery now have an explicit execution and
