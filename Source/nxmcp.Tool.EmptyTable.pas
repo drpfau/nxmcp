@@ -65,7 +65,7 @@ begin
     procedure
     begin
       nxmodule.nxSession1.CloseInactiveTables;
-      nxmodule.nxDatabase1.EmptyTable(Params.TableName, nxmodule.TablePassword);
+      nxmodule.nxDatabase1.EmptyTable(Params.TableName, cSessionPasswords);
     end);
 
   // Build result

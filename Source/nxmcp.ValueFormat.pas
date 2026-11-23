@@ -97,7 +97,7 @@ begin
         procedure
         begin
           nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(
-            ATableName, nxmodule.TablePassword, LDict));
+            ATableName, cSessionPasswords, LDict));
         end);
 
       for I := 0 to LDict.FieldsDescriptor.FieldCount - 1 do

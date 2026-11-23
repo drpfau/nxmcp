@@ -86,7 +86,7 @@ begin
         procedure
         begin
           nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(
-            Params.TableName, nxmodule.TablePassword, LDict));
+            Params.TableName, cSessionPasswords, LDict));
         end);
 
       if Assigned(LDict.IndicesDescriptor) then

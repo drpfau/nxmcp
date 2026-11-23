@@ -35,6 +35,11 @@ Notable changes to nxmcp.
   text over stdio is no longer mangled, `Host=localhost` binds to loopback only, the
   `Origin` header is checked on every HTTP request, and the library adds a
   `server://status` resource.
+* Table-level operations (schema reads, restructures, empty, rename, pack, reindex,
+  recover, autoinc) no longer pass a table password explicitly; they rely on the
+  passwords held by the session, which the server merges in anyway. `nxmodule.TablePassword`
+  is gone: it returned the raw INI string (a comma list was not a valid password) and,
+  after a switch, possibly not the password in effect.
 
 ## [6.0.0.0] - 2026-08-30
 

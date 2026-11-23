@@ -136,7 +136,7 @@ begin
     LOldDict := TnxDataDictionary.Create;
     try
       // Get existing dictionary
-      nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(Params.TableName, nxmodule.TablePassword, LOldDict));
+      nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(Params.TableName, cSessionPasswords, LOldDict));
 
       // Check if column exists
       LFieldIdx := LOldDict.FieldsDescriptor.GetFieldFromName(Params.ColumnName);
@@ -196,7 +196,7 @@ begin
           if LIsRename then
             TnxRecordMapperDescriptor(LMapper.RecordMapper).AddMapping(Params.ColumnName, Params.NewName);
 
-          nxCheck(nxmodule.nxDatabase1.RestructureTableEx(Params.TableName, nxmodule.TablePassword,
+          nxCheck(nxmodule.nxDatabase1.RestructureTableEx(Params.TableName, cSessionPasswords,
             LNewDict, LMapper, LTaskInfo));
 
           // Wait for completion

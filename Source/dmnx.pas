@@ -136,9 +136,19 @@ type
     property DefaultAliasPath: string read FDefaultAliasPath;
     property DefaultServerHost: string read FDefaultServerHost;
     property DefaultServerPort: Integer read FDefaultServerPort;
-    property TablePassword: string read FTablePassword;
     property BusyTimeout: Integer read FBusyTimeout;
   end;
+
+const
+  /// <summary>
+  ///  The explicit password argument for table-level API calls (GetDataDictionaryEx,
+  ///  RestructureTableEx, EmptyTable, RenameTable, PackTableEx, ...). Always empty: the
+  ///  table passwords live on the session (ApplyConfiguredPasswords), and the server
+  ///  merges the session's list with the explicit one - TnxServerSession.ssBuildPasswords
+  ///  copies ssPasswords and only appends aPassword (nxsrServerEngine.pas). Passing a
+  ///  password here adds nothing; a comma-list INI value would not even be a valid one.
+  /// </summary>
+  cSessionPasswords = '';
 
 var
   nxmodule: Tnxmodule;

@@ -89,7 +89,7 @@ begin
 
   LOldDict := TnxDataDictionary.Create;
   try
-    nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(ATableName, nxmodule.TablePassword, LOldDict));
+    nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(ATableName, cSessionPasswords, LOldDict));
 
     LNewDict := TnxDataDictionary.Create;
     try
@@ -103,7 +103,7 @@ begin
       try
         LMapper.MapAllTablesAndFieldsByName(LOldDict, LNewDict);
 
-        nxCheck(nxmodule.nxDatabase1.RestructureTableEx(ATableName, nxmodule.TablePassword,
+        nxCheck(nxmodule.nxDatabase1.RestructureTableEx(ATableName, cSessionPasswords,
           LNewDict, LMapper, LTaskInfo));
 
         if Assigned(LTaskInfo) then

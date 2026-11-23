@@ -94,7 +94,7 @@ begin
 
   LOldDict := TnxDataDictionary.Create;
   try
-    nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(Params.TableName, nxmodule.TablePassword, LOldDict));
+    nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(Params.TableName, cSessionPasswords, LOldDict));
 
     LIndexIdx := FindIndexFromName(LOldDict, Params.IndexName);
     if LIndexIdx < 0 then
@@ -126,7 +126,7 @@ begin
       try
         LMapper.MapAllTablesAndFieldsByName(LOldDict, LNewDict);
 
-        nxCheck(nxmodule.nxDatabase1.RestructureTableEx(Params.TableName, nxmodule.TablePassword,
+        nxCheck(nxmodule.nxDatabase1.RestructureTableEx(Params.TableName, cSessionPasswords,
           LNewDict, LMapper, LTaskInfo));
 
         if Assigned(LTaskInfo) then

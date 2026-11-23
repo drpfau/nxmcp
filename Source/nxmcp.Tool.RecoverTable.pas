@@ -74,7 +74,7 @@ begin
 
       // Start recover operation
       nxCheck(nxmodule.nxDatabase1.RecoverTableEx(Params.TableName,
-        nxmodule.TablePassword, LTaskInfo));
+        cSessionPasswords, LTaskInfo));
 
       // Wait for completion
       if Assigned(LTaskInfo) then

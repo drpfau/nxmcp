@@ -66,7 +66,7 @@ begin
   nxmodule.ExecuteWithReconnect(
     procedure
     begin
-      nxmodule.nxDatabase1.GetAutoIncValue(Params.TableName, nxmodule.TablePassword, LValue);
+      nxmodule.nxDatabase1.GetAutoIncValue(Params.TableName, cSessionPasswords, LValue);
     end);
 
   // Build result
