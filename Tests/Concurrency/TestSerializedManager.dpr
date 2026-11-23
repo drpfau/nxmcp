@@ -1,4 +1,4 @@
-program TestSerializedManager;
+﻿program TestSerializedManager;
 
 {$APPTYPE CONSOLE}
 

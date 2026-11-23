@@ -1,4 +1,4 @@
-unit nxmcp.QueryParams;
+﻿unit nxmcp.QueryParams;
 
 /// <summary>
 /// Binds JSON-supplied parameter values to the :name placeholders of a

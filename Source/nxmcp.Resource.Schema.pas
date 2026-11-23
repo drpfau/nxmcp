@@ -1,4 +1,4 @@
-unit nxmcp.Resource.Schema;
+﻿unit nxmcp.Resource.Schema;
 
 interface
 

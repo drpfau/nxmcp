@@ -1,4 +1,4 @@
-unit nxmcp.Tool.GetAutoIncValue;
+﻿unit nxmcp.Tool.GetAutoIncValue;
 
 interface
 

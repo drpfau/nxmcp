@@ -1,4 +1,4 @@
-unit nxmcp.Tool.AddColumn;
+﻿unit nxmcp.Tool.AddColumn;
 
 interface
 

@@ -1,4 +1,4 @@
-unit nxmcp.FieldTypes;
+﻿unit nxmcp.FieldTypes;
 
 /// <summary>
 /// Shared field type conversion utilities using RTTI.

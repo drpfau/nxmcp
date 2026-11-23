@@ -1,4 +1,4 @@
-unit nxmcp.Tool.RenameTable;
+﻿unit nxmcp.Tool.RenameTable;
 
 interface
 

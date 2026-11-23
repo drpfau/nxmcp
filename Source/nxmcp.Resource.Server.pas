@@ -1,4 +1,4 @@
-unit nxmcp.Resource.Server;
+﻿unit nxmcp.Resource.Server;
 
 interface
 

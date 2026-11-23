@@ -1,4 +1,4 @@
-unit nxmcp.Resource.Tables;
+﻿unit nxmcp.Resource.Tables;
 
 interface
 

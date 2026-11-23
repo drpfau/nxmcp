@@ -1,4 +1,4 @@
-unit nxmcp.Tool.CopyTable;
+﻿unit nxmcp.Tool.CopyTable;
 
 interface
 

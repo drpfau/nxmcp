@@ -1,4 +1,4 @@
-unit nxmcp.Tool.GetQueryLog;
+﻿unit nxmcp.Tool.GetQueryLog;
 
 interface
 

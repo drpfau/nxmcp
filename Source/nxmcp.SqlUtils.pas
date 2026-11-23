@@ -1,4 +1,4 @@
-unit nxmcp.SqlUtils;
+﻿unit nxmcp.SqlUtils;
 
 interface
 

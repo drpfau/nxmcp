@@ -1,4 +1,4 @@
-unit nxmcp.Tool.SwitchDatabase;
+﻿unit nxmcp.Tool.SwitchDatabase;
 
 interface
 

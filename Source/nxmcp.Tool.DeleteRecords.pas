@@ -1,4 +1,4 @@
-unit nxmcp.Tool.DeleteRecords;
+﻿unit nxmcp.Tool.DeleteRecords;
 
 interface
 

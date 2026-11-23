@@ -1,4 +1,4 @@
-unit nxmcp.Tool.ExecuteSQL;
+﻿unit nxmcp.Tool.ExecuteSQL;
 
 interface
 

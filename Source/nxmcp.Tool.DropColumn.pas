@@ -1,4 +1,4 @@
-unit nxmcp.Tool.DropColumn;
+﻿unit nxmcp.Tool.DropColumn;
 
 interface
 

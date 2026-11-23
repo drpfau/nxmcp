@@ -1,4 +1,4 @@
-unit nxmcp.Tool.ExecuteQuery;
+﻿unit nxmcp.Tool.ExecuteQuery;
 
 interface
 

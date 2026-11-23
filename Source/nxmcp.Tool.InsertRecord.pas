@@ -1,4 +1,4 @@
-unit nxmcp.Tool.InsertRecord;
+﻿unit nxmcp.Tool.InsertRecord;
 
 interface
 

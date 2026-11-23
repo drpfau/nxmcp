@@ -1,4 +1,4 @@
-{##############################################################################}
+﻿{##############################################################################}
 {# NexusDB: nxExeConst.pas %NXDBVERSION%                                      #}
 {# NexusDB Memory Manager: nxllConst.pas %MMVERSION%                          #}
 {# Copyright (c) NexusQA Pty. Ltd. %COPYRIGHT%                                #}

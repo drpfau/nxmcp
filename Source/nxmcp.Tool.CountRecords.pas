@@ -1,4 +1,4 @@
-unit nxmcp.Tool.CountRecords;
+﻿unit nxmcp.Tool.CountRecords;
 
 interface
 

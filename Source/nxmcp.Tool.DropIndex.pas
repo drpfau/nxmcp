@@ -1,4 +1,4 @@
-unit nxmcp.Tool.DropIndex;
+﻿unit nxmcp.Tool.DropIndex;
 
 interface
 

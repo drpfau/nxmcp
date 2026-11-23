@@ -1,4 +1,4 @@
-unit nxmcp.Tool.GetTableData;
+﻿unit nxmcp.Tool.GetTableData;
 
 interface
 

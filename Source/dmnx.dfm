@@ -1,4 +1,4 @@
-object nxmodule: Tnxmodule
+﻿object nxmodule: Tnxmodule
   OnCreate = DataModuleCreate
   OnDestroy = DataModuleDestroy
   Height = 480

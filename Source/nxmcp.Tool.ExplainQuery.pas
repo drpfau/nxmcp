@@ -1,4 +1,4 @@
-unit nxmcp.Tool.ExplainQuery;
+﻿unit nxmcp.Tool.ExplainQuery;
 
 interface
 

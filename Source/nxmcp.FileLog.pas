@@ -1,4 +1,4 @@
-unit nxmcp.FileLog;
+﻿unit nxmcp.FileLog;
 
 {
   Process-local file logging for nxmcp.

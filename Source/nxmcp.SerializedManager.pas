@@ -1,4 +1,4 @@
-unit nxmcp.SerializedManager;
+﻿unit nxmcp.SerializedManager;
 
 interface
 
