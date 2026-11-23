@@ -91,7 +91,7 @@ begin
       LDict := TnxDataDictionary.Create;
       try
         nxCheck(nxmodule.nxDatabase1.GetDataDictionaryEx(Params.SourceTable,
-          nxmodule.TablePassword, LDict));
+          cSessionPasswords, LDict));
 
         // Create the new table with same structure
         nxmodule.nxDatabase1.CreateTable(False, Params.TargetTable, '', LDict);

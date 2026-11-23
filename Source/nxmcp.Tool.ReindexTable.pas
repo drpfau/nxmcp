@@ -81,7 +81,7 @@ begin
 
       // Start reindex operation
       nxCheck(nxmodule.nxDatabase1.ReIndexTableEx(Params.TableName,
-        nxmodule.TablePassword, Params.IndexName, LTaskInfo));
+        cSessionPasswords, Params.IndexName, LTaskInfo));
 
       // Wait for completion
       if Assigned(LTaskInfo) then

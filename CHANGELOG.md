@@ -21,6 +21,12 @@ Notable changes to nxmcp.
   so clients such as Claude Code listed no tools. The library now builds capabilities only
   from managers implementing `IMCPCapabilityProvider`; the filter and serialization wrappers
   now forward it to the wrapped manager.
+* `switch_database` no longer drops the INI table passwords on the next reconnect; a
+  tool-supplied `tablePassword` is added on top of them. `switch_server` back to the
+  INI-configured server (same host and port, or embedded when that is the INI mode)
+  reapplies them; another server never receives them, only a tool-supplied password.
+* Re-adding a table password the session already holds no longer fails with
+  `DBIERR_NAMENOTUNIQUE`, and a password retired by a switch is removed from the session.
 
 ### Changed
 
@@ -29,6 +35,11 @@ Notable changes to nxmcp.
   text over stdio is no longer mangled, `Host=localhost` binds to loopback only, the
   `Origin` header is checked on every HTTP request, and the library adds a
   `server://status` resource.
+* Table-level operations (schema reads, restructures, empty, rename, pack, reindex,
+  recover, autoinc) no longer pass a table password explicitly; they rely on the
+  passwords held by the session, which the server merges in anyway. `nxmodule.TablePassword`
+  is gone: it returned the raw INI string (a comma list was not a valid password) and,
+  after a switch, possibly not the password in effect.
 
 ## [6.0.0.0] - 2026-08-30
 

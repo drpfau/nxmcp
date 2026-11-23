@@ -75,7 +75,7 @@ begin
     procedure
     begin
       nxmodule.nxSession1.CloseInactiveTables;
-      nxmodule.nxDatabase1.RenameTable(Params.OldName, Params.NewName, nxmodule.TablePassword);
+      nxmodule.nxDatabase1.RenameTable(Params.OldName, Params.NewName, cSessionPasswords);
     end);
 
   // Build result
