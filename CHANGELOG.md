@@ -24,8 +24,6 @@ Notable changes to nxmcp.
   `rollback`/`commit` mode. Errors raised by the script are returned as
   `{"success": false, "error": "...", "errorCode": n, "rolledBack": bool}` with the full NexusDB message;
   invalid parameters are tool errors. `execute_query` keeps its single-read guard unchanged.
-* Opt-in tools: `run_script` is disabled unless `[Tools] run_script=1` is set explicitly;
-  a generated ini writes it as `0`. Every other tool keeps the "absent means enabled" rule.
 
 ### Fixed
 

@@ -55,7 +55,7 @@ type
 
   /// <summary>
   /// MCP Tool that runs a whole multi-statement SQL script and returns the last result set.
-  /// Writes are allowed, so it is opt-in: disabled unless [Tools] run_script=1 is set in the ini.
+  /// Writes are allowed; rolled back by default (transaction="rollback").
   /// </summary>
   TRunScriptTool = class(TMCPToolBase<TRunScriptParams>)
   protected
@@ -226,7 +226,7 @@ end;
 constructor TRunScriptTool.Create;
 begin
   inherited;
-  FName := cRunScriptToolName;
+  FName := 'run_script';
   FTitle := 'Run SQL Script';
   FDescription := 'Run a complete multi-statement SQL script (SELECT ... INTO #temp chains, DECLARE/cursor/' +
                   'WHILE loops, START TRANSACTION blocks, DML, DDL) as ONE batch and return the result set ' +
@@ -505,7 +505,7 @@ begin
 end;
 
 initialization
-  TMCPRegistry.RegisterTool(cRunScriptToolName,
+  TMCPRegistry.RegisterTool('run_script',
     function: IMCPTool
     begin
       Result := TRunScriptTool.Create;

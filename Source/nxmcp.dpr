@@ -211,8 +211,7 @@ begin
   ManagerRegistry.RegisterManager(CoreManager);
   LExecutionGate := CreateExecutionGate;
   // Wrapped so that anything switched off in [Tools] / [Resources] is neither
-  // listed nor callable. Everything is on unless the ini says otherwise, except the
-  // opt-in tools (dmnx cOptInTools), which are off unless the ini sets them to 1.
+  // listed nor callable. Everything is on unless the ini says otherwise.
   ManagerRegistry.RegisterManager(
     FilterTools(SerializeTools(TMCPToolsManager.Create, LExecutionGate,
       Cardinal(nxmodule.BusyTimeout)),
