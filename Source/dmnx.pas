@@ -50,8 +50,6 @@ type
     FIniExtraTablePasswords: TArray<string>;
     // Whether the INI passwords are in effect for the current connection.
     FUseIniTablePasswords: Boolean;
-    // [Database] KeepTablePasswordsOnServerSwitch: keep the INI passwords on a non-default server.
-    FKeepIniTablePasswordsOnServerSwitch: Boolean;
     FUsername: string;
     FPassword: string;
     FAutoConnect: Boolean;
@@ -222,7 +220,6 @@ begin
   FTablePasswordIsCommaList := True;
   FExtraTablePasswords := nil;
   FUseIniTablePasswords := True;
-  FKeepIniTablePasswordsOnServerSwitch := False;
   FUsername := 'Administrator';
   FPassword := 'NexusDB';
   FAutoConnect := True;
@@ -275,7 +272,6 @@ begin
     end;
     FIniTablePassword := FTablePassword;
     FIniExtraTablePasswords := FExtraTablePasswords;
-    FKeepIniTablePasswordsOnServerSwitch := LIniFile.ReadBool('Database', 'KeepTablePasswordsOnServerSwitch', FKeepIniTablePasswordsOnServerSwitch);
 
     // Authentication section
     FUsername := LIniFile.ReadString('Authentication', 'Username', FUsername);
@@ -393,8 +389,6 @@ begin
     LIniFile.WriteString('Database', '; Table passwords, comma separated (leave empty if not used)', '');
     LIniFile.WriteString('Database', 'TablePassword', '');
     LIniFile.WriteString('Database', '; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead', '');
-    LIniFile.WriteString('Database', '; Keep using the passwords above after switch_server to another server or to embedded mode (1=yes, 0=no)', '');
-    LIniFile.WriteBool('Database', 'KeepTablePasswordsOnServerSwitch', False);
 
     // Authentication section
     LIniFile.WriteString('Authentication', '; NexusDB username', '');
@@ -1295,10 +1289,10 @@ begin
     end;
 
     // Update table passwords. The INI passwords belong to the INI-configured server: they are kept
-    // when switching back to it (same host and port), and only sent to another server when
-    // KeepTablePasswordsOnServerSwitch is enabled.
-    SetTablePasswords(ATablePassword, FKeepIniTablePasswordsOnServerSwitch or
-      ((FDefaultServerMode = smRemote) and SameText(AServerHost, FDefaultServerHost) and (AServerPort = FDefaultServerPort)));
+    // when switching back to it (same host and port, compared literally) and never sent to
+    // another server, which only gets a tool-supplied password.
+    SetTablePasswords(ATablePassword,
+      (FDefaultServerMode = smRemote) and SameText(AServerHost, FDefaultServerHost) and (AServerPort = FDefaultServerPort));
 
     // Full reconnect (transport -> engine -> session -> database + password)
     if not Connect then
@@ -1405,10 +1399,10 @@ begin
     DisconnectForSwitch;
 
     // Switch to the in-process engine with a direct database folder path.
-    // The INI passwords are only kept when embedded is the INI-configured mode or
-    // KeepTablePasswordsOnServerSwitch is enabled, same as switch_server.
+    // The INI passwords are only kept when embedded is the INI-configured mode, same rule
+    // as switch_server.
     FServerMode := smEmbedded;
-    SetTablePasswords(ATablePassword, FKeepIniTablePasswordsOnServerSwitch or (FDefaultServerMode = smEmbedded));
+    SetTablePasswords(ATablePassword, FDefaultServerMode = smEmbedded);
     nxDatabase1.AliasPath := AAliasPath;
     FAliasPath := nxDatabase1.AliasPath;  // component may normalize the path
     FAliasName := '';

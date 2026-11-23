@@ -14,9 +14,6 @@ Notable changes to nxmcp.
 * `initialize` now returns `instructions` for the AI client: NexusDB typed literals and
   `params`, the result date format, which tool to use for what, dialect specifics and the
   one-session gate. `[Server] Instructions` in `nxmcp.ini` replaces the built-in text.
-* Added `[Database] KeepTablePasswordsOnServerSwitch` (default `0`). When `1`, the INI table
-  passwords (`TablePassword`, `TablePasswords1..N`) are also sent after `switch_server` to
-  another server or to embedded mode; a tool-supplied `tablePassword` is added on top.
 
 ### Fixed
 
@@ -24,8 +21,10 @@ Notable changes to nxmcp.
   so clients such as Claude Code listed no tools. The library now builds capabilities only
   from managers implementing `IMCPCapabilityProvider`; the filter and serialization wrappers
   now forward it to the wrapped manager.
-* `switch_database` no longer drops the INI table passwords on the next reconnect, and
-  switching back to the INI-configured server reapplies them.
+* `switch_database` no longer drops the INI table passwords on the next reconnect; a
+  tool-supplied `tablePassword` is added on top of them. `switch_server` back to the
+  INI-configured server (same host and port, or embedded when that is the INI mode)
+  reapplies them; another server never receives them, only a tool-supplied password.
 * Re-adding a table password the session already holds no longer fails with
   `DBIERR_NAMENOTUNIQUE`, and a password retired by a switch is removed from the session.
 
