@@ -50,6 +50,9 @@ type
     FIniExtraTablePasswords: TArray<string>;
     // Whether the INI passwords are in effect for the current connection.
     FUseIniTablePasswords: Boolean;
+    // [Database] TablePasswordServers: further targets that may receive the INI passwords
+    // (lower-cased 'host', 'host:port' or 'embedded'), or '*' for any target.
+    FTablePasswordServers: TArray<string>;
     FUsername: string;
     FPassword: string;
     FAutoConnect: Boolean;
@@ -75,6 +78,8 @@ type
     procedure ApplyPassword(const APassword: string; AIsCommaList: Boolean);
     procedure ApplyConfiguredPasswords;
     procedure SetTablePasswords(const AToolPassword: string; AUseIni: Boolean);
+    function IniPasswordsAllowedFor(AMode: TnxServerMode; const AHost: string;
+      APort: Integer): Boolean;
     procedure WireServerEngine;
     function ConnectRemote: Boolean;
     function ConnectEmbedded: Boolean;
@@ -230,6 +235,7 @@ begin
   FTablePasswordIsCommaList := True;
   FExtraTablePasswords := nil;
   FUseIniTablePasswords := True;
+  FTablePasswordServers := nil;
   FUsername := 'Administrator';
   FPassword := 'NexusDB';
   FAutoConnect := True;
@@ -282,6 +288,11 @@ begin
     end;
     FIniTablePassword := FTablePassword;
     FIniExtraTablePasswords := FExtraTablePasswords;
+    // Further switch_server targets that may receive the INI passwords. Empty (default):
+    // only the INI-configured target. See IniPasswordsAllowedFor.
+    for LKey in LIniFile.ReadString('Database', 'TablePasswordServers', '').Split([',']) do
+      if Trim(LKey) <> '' then
+        FTablePasswordServers := FTablePasswordServers + [LowerCase(Trim(LKey))];
 
     // Authentication section
     FUsername := LIniFile.ReadString('Authentication', 'Username', FUsername);
@@ -399,6 +410,10 @@ begin
     LIniFile.WriteString('Database', '; Table passwords, comma separated (leave empty if not used)', '');
     LIniFile.WriteString('Database', 'TablePassword', '');
     LIniFile.WriteString('Database', '; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead', '');
+    LIniFile.WriteString('Database', '; The passwords above are only sent to the server configured here. switch_server targets listed', '');
+    LIniFile.WriteString('Database', '; below get them too: host:port or host (any port), comma separated; embedded for embedded mode.', '');
+    LIniFile.WriteString('Database', '; * sends them to ANY server a client switches to - the client chooses that host. Use with care.', '');
+    LIniFile.WriteString('Database', 'TablePasswordServers', '');
 
     // Authentication section
     LIniFile.WriteString('Authentication', '; NexusDB username', '');
@@ -631,6 +646,12 @@ end;
 procedure Tnxmodule.SetTablePasswords(const AToolPassword: string; AUseIni: Boolean);
 begin
   FUseIniTablePasswords := AUseIni;
+  // Diagnostic only - never the passwords themselves.
+  if (FIniTablePassword <> '') or (Length(FIniExtraTablePasswords) > 0) then
+    if AUseIni then
+      TLogger.Info('INI table passwords: in effect for this target')
+    else
+      TLogger.Info('INI table passwords: not sent to this target (see [Database] TablePasswordServers)');
   if AUseIni then
   begin
     // INI passwords stay in effect; a tool-supplied password is added on top as a verbatim extra.
@@ -647,6 +668,68 @@ begin
     FTablePassword := AToolPassword;
     FTablePasswordIsCommaList := False;
     FExtraTablePasswords := nil;
+  end;
+end;
+
+function Tnxmodule.IniPasswordsAllowedFor(AMode: TnxServerMode; const AHost: string;
+  APort: Integer): Boolean;
+var
+  LEntry: string;
+  LHost: string;
+  LPortText: string;
+  LSep: Integer;
+begin
+  // The INI-configured target always gets the INI passwords (compared literally:
+  // 'localhost' and '127.0.0.1' are different entries).
+  if AMode = smEmbedded then
+    Result := FDefaultServerMode = smEmbedded
+  else
+    Result := (FDefaultServerMode = smRemote) and SameText(AHost, FDefaultServerHost) and
+      (APort = FDefaultServerPort);
+  if Result then
+    Exit;
+
+  // [Database] TablePasswordServers widens that, never by default: switch_server takes its
+  // target from the AI client, and adding a password is a round-trip that transmits it to
+  // that server. Entries: '*' (any target), 'embedded', 'host' (any port), 'host:port';
+  // an IPv6 address with a port is written '[addr]:port'.
+  for LEntry in FTablePasswordServers do
+  begin
+    if LEntry = '*' then
+      Exit(True);
+    if AMode = smEmbedded then
+    begin
+      if LEntry = 'embedded' then
+        Exit(True);
+      Continue;
+    end;
+    if LEntry = 'embedded' then
+      Continue;
+
+    LHost := LEntry;
+    LPortText := '';
+    if LEntry.StartsWith('[') then
+    begin
+      // [IPv6]:port or [IPv6]
+      LSep := Pos(']', LEntry);
+      if LSep > 0 then
+      begin
+        LHost := Copy(LEntry, 2, LSep - 2);
+        if Copy(LEntry, LSep + 1, 1) = ':' then
+          LPortText := Copy(LEntry, LSep + 2, MaxInt);
+      end;
+    end
+    else if LEntry.CountChar(':') = 1 then
+    begin
+      // host:port (several colons without brackets: a bare IPv6 address, no port)
+      LSep := Pos(':', LEntry);
+      LHost := Copy(LEntry, 1, LSep - 1);
+      LPortText := Copy(LEntry, LSep + 1, MaxInt);
+    end;
+
+    if SameText(LHost, AHost) and
+       ((LPortText = '') or (StrToIntDef(LPortText, -1) = APort)) then
+      Exit(True);
   end;
 end;
 
@@ -1298,11 +1381,10 @@ begin
       FAliasPath := '';
     end;
 
-    // Update table passwords. The INI passwords belong to the INI-configured server: they are kept
-    // when switching back to it (same host and port, compared literally) and never sent to
-    // another server, which only gets a tool-supplied password.
-    SetTablePasswords(ATablePassword,
-      (FDefaultServerMode = smRemote) and SameText(AServerHost, FDefaultServerHost) and (AServerPort = FDefaultServerPort));
+    // Update table passwords. The INI passwords go to the INI-configured server and to the
+    // targets listed in [Database] TablePasswordServers - by default to no other server;
+    // any other server only gets a tool-supplied password.
+    SetTablePasswords(ATablePassword, IniPasswordsAllowedFor(smRemote, AServerHost, AServerPort));
 
     // Full reconnect (transport -> engine -> session -> database + password)
     if not Connect then
@@ -1409,10 +1491,10 @@ begin
     DisconnectForSwitch;
 
     // Switch to the in-process engine with a direct database folder path.
-    // The INI passwords are only kept when embedded is the INI-configured mode, same rule
-    // as switch_server.
+    // The INI passwords are only kept when embedded is the INI-configured mode or
+    // TablePasswordServers lists 'embedded' (or '*'), same rule as switch_server.
     FServerMode := smEmbedded;
-    SetTablePasswords(ATablePassword, FDefaultServerMode = smEmbedded);
+    SetTablePasswords(ATablePassword, IniPasswordsAllowedFor(smEmbedded, '', 0));
     nxDatabase1.AliasPath := AAliasPath;
     FAliasPath := nxDatabase1.AliasPath;  // component may normalize the path
     FAliasName := '';

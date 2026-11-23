@@ -6,8 +6,9 @@ Notable changes to nxmcp.
 
 Major version because the build and some tool contracts changed: nxmcp now needs
 Delphi-MCP-Server `f950352` (with `src` and `src\Prompts` on the library path), INI table
-passwords are never sent to another server, `batch_execute` refuses statements that use
-`AUTOCOMMITONDDL`, and every tool now declares MCP annotations that clients act on.
+passwords only go to servers the ini names (`TablePasswordServers`), `batch_execute`
+refuses statements that use `AUTOCOMMITONDDL`, and every tool now declares MCP annotations
+that clients act on.
 
 ### Added
 
@@ -19,6 +20,10 @@ passwords are never sent to another server, `batch_execute` refuses statements t
 * `initialize` now returns `instructions` for the AI client: NexusDB typed literals and
   `params`, the result date format, which tool to use for what, dialect specifics and the
   one-session gate. `[Server] Instructions` in `nxmcp.ini` replaces the built-in text.
+* `[Database] TablePasswordServers`: further `switch_server` targets that also receive the
+  INI table passwords - `host:port`, `host` (any port), `embedded`, or `*` for any target.
+  Empty by default, so the INI passwords still go only to the INI-configured server. For
+  installations with several NXservers serving copies of the same databases.
 * Added `run_script`: runs a complete multi-statement script as one batch (so `#temp`
   tables, variables and cursors live for the whole script) and returns the last result set
   as typed JSON - `columns` (name, type) plus `rows` as arrays in column order, ISO 8601

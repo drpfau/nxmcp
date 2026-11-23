@@ -48,6 +48,10 @@ AliasPath=
 ; Table passwords, comma separated (leave empty if not used)
 TablePassword=
 ; For a password that contains a literal comma, add it as TablePasswords1, TablePasswords2, ... instead
+; The passwords above are only sent to the server configured here. switch_server targets listed
+; below get them too: host:port or host (any port), comma separated; embedded for embedded mode.
+; * sends them to ANY server a client switches to - the client chooses that host. Use with care.
+TablePasswordServers=
 
 [Authentication]
 ; NexusDB username
