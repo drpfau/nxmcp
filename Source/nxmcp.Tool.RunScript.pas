@@ -1,4 +1,4 @@
-unit nxmcp.Tool.RunScript;
+﻿unit nxmcp.Tool.RunScript;
 
 interface
 
@@ -78,6 +78,7 @@ uses
   MCPServer.Errors,
   nxmcp.NexusErrors,
   nxmcp.QueryParams,
+  nxmcp.ToolAnnotations,
   dmnx;
 
 type
@@ -228,11 +229,20 @@ constructor TRunScriptTool.Create;
 begin
   inherited;
   FName := 'run_script';
+  // Destructive: any statement, including DDL with transaction="none". The default
+  // rollback mode makes the common case harmless, but the hint describes the worst case.
+  AnnotateTool(FAnnotations, tkDestructive);
   FTitle := 'Run SQL Script';
   FDescription := 'Run a complete multi-statement SQL script (SELECT ... INTO #temp chains, DECLARE/cursor/' +
                   'WHILE loops, START TRANSACTION blocks, DML, DDL) as ONE batch and return the result set ' +
-                  'of the last statement as typed JSON: columns (name, Delphi field type) and rows as arrays in column ' +
-                  'order. WRITES ARE ALLOWED. By default everything runs inside a transaction that is always ' +
+                  'of the last statement. ' +
+                  'RESULT FORMAT DIFFERS FROM execute_query: "columns" lists {name, type} and "rows" holds ' +
+                  'one ARRAY per row, values in column order (not objects); column names are exactly as ' +
+                  'NexusDB returns them (not camelCased, duplicates kept); DATETIME is "YYYY-MM-DDTHH:NN:SS.ZZZ" ' +
+                  'without offset (wall clock), DATE "YYYY-MM-DD", TIME "HH:NN:SS.ZZZ"; numbers are JSON numbers; ' +
+                  'BLOBs are base64 (or {bytes, md5} with blobFormat="md5"). Without a result set the answer ' +
+                  'has rowsAffected instead. ' +
+                  'WRITES ARE ALLOWED. By default everything runs inside a transaction that is always ' +
                   'rolled back (transaction="rollback"); use "commit" to keep the changes, or "none" for DDL. ' +
                   'A failing script is a tool error (isError) whose text is the JSON object ' +
                   '{"success": false, "error": "...", "errorCode": n, "rolledBack": bool} with the full NexusDB message; ' +

@@ -119,7 +119,7 @@ Every tool constructor calls `AnnotateTool(FAnnotations, <kind>)` (`nxmcp.ToolAn
 | `tkReadOnly` | readOnly | `execute_query`, `get_table_data`, `get_table_schema`, `count_records`, `list_indexes`, `list_locks`, `list_aliases`, `get_autoinc_value`, `get_query_log` |
 | `tkAdditive` | not destructive, not idempotent | `insert_record`, `create_table`, `create_index`, `add_column`, `copy_table`, `rename_table`, `explain_query` (really executes writes, rolled back - locks, autoinc) |
 | `tkIdempotent` | not destructive, idempotent | `set_table/column/index_description`, `set_column_default`, `set_audit`, `reindex_table`, `close_inactive_tables`, `set_timeout`, `switch_database`, `switch_server` |
-| `tkDestructive` | destructive | `execute_sql`, `batch_execute`, `update_records`, `delete_records`, `drop_table/column/index`, `empty_table`, `modify_column`, `pack_table`, `recover_table`, `change_password`, `set_field_validator`, `set_data_policies` (the last two block later writes) |
+| `tkDestructive` | destructive | `execute_sql`, `batch_execute`, `run_script`, `update_records`, `delete_records`, `drop_table/column/index`, `empty_table`, `modify_column`, `pack_table`, `recover_table`, `change_password`, `set_field_validator`, `set_data_policies` (the last two block later writes) |
 
 `nxmcp.ServerInstructions.pas` holds `cServerInstructions`, the text sent as `instructions` in the `initialize` result (set in `nxmcp.dpr` unless `[Server] Instructions` in `nxmcp.ini` overrides it). It repeats rules from this file for the AI client — typed literals, `params`, dialect specifics, the one-session gate. **When a tool's behaviour or one of those rules changes, update the text too.**
 
