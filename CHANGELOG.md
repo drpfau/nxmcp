@@ -2,6 +2,45 @@
 
 Notable changes to nxmcp.
 
+## [Unreleased]
+
+### Fixed
+
+* A failed `switch_server` / switch to embedded whose target server answered but whose
+  database did not open (e.g. an unknown alias) could not roll back: the rollback assigned
+  the old host and alias to components the failed attempt had left active, NexusDB raised
+  "This component must be inactive", and the restore stopped half way. The instance then
+  reported the old server while the transport still pointed at the new one, and every call
+  failed with "Not connected" until the next explicit switch. The rollback now tears the
+  connection down first (`ForceDisconnect`) before restoring. `switch_database` does the
+  same for a database left open by its failed attempt (`CloseDatabaseForSwitch`).
+* The same rollbacks restored the database target by assigning only the saved alias or path.
+  `TnxBaseDatabase` clears the other property only for a non-empty value, so rolling back to
+  an empty target (no database configured) kept the failed attempt's alias or path, and the
+  rollback's reconnect could open that database on the original server. `RestoreDatabaseTarget`
+  now clears both before restoring.
+* When a switch's rollback itself fails, the connection is now torn down completely
+  (`RetireAfterFailedRollback`). `Connect` is fail-soft and opens the database before restoring
+  the session passwords, so a rollback failing part-way could leave a database that reported
+  Connected with only part of its passwords, which later calls would reuse; now the next call
+  reconnects from scratch.
+* Remote connects now copy the tracked host, port and database target onto the transport and
+  database before opening them (embedded connects already did this for the path). If a rollback
+  still fails part-way - e.g. a component that could not be deactivated rejects the restore -
+  the fields and the components can disagree; the next reconnect now follows the fields
+  instead of silently opening the failed target.
+* Rollbacks now restore the connection only as far as it was up before the switch
+  (`RestorePreviousLevel`): a switch made while only a session was open (e.g. no database
+  configured, session opened by `list_aliases`) reopens just the session instead of trying to
+  open a database and reporting "Rollback also failed"; a closed database stays closed.
+  `EnsureSession` also takes the host and port from the tracked fields now.
+
+### Changed
+
+* A failed switch whose rollback rebuilt the previous connection now says
+  "The previous connection was restored." in its error message, so a caller can tell a failed but harmless
+  switch from one that left the instance unusable ("Rollback also failed: ...").
+
 ## [7.0.0.0] - 2026-11-23
 
 Major version because the build and some tool contracts changed: nxmcp now needs
