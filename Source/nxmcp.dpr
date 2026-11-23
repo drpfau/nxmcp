@@ -42,6 +42,7 @@ uses
   nxmcp.Resource.Tables in 'nxmcp.Resource.Tables.pas',
   nxmcp.Resource.Schema in 'nxmcp.Resource.Schema.pas',
   nxmcp.Tool.ExecuteQuery in 'nxmcp.Tool.ExecuteQuery.pas',
+  nxmcp.Tool.RunScript in 'nxmcp.Tool.RunScript.pas',
   nxmcp.Tool.GetTableSchema in 'nxmcp.Tool.GetTableSchema.pas',
   // Phase 3 - Data Manipulation
   nxmcp.Tool.ExecuteSQL in 'nxmcp.Tool.ExecuteSQL.pas',

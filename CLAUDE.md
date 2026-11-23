@@ -94,6 +94,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Tool | Description |
 |------|-------------|
 | `batch_execute` | Execute multiple SQL statements in a single transaction |
+| `run_script` | Run a whole script as ONE batch; return the last result set as typed JSON. See "run_script" below |
 
 ### Utility (Phase 7)
 | Tool | Description |
@@ -118,7 +119,7 @@ Every tool constructor calls `AnnotateTool(FAnnotations, <kind>)` (`nxmcp.ToolAn
 | `tkReadOnly` | readOnly | `execute_query`, `get_table_data`, `get_table_schema`, `count_records`, `list_indexes`, `list_locks`, `list_aliases`, `get_autoinc_value`, `get_query_log` |
 | `tkAdditive` | not destructive, not idempotent | `insert_record`, `create_table`, `create_index`, `add_column`, `copy_table`, `rename_table`, `explain_query` (really executes writes, rolled back - locks, autoinc) |
 | `tkIdempotent` | not destructive, idempotent | `set_table/column/index_description`, `set_column_default`, `set_audit`, `reindex_table`, `close_inactive_tables`, `set_timeout`, `switch_database`, `switch_server` |
-| `tkDestructive` | destructive | `execute_sql`, `batch_execute`, `update_records`, `delete_records`, `drop_table/column/index`, `empty_table`, `modify_column`, `pack_table`, `recover_table`, `change_password`, `set_field_validator`, `set_data_policies` (the last two block later writes) |
+| `tkDestructive` | destructive | `execute_sql`, `batch_execute`, `run_script`, `update_records`, `delete_records`, `drop_table/column/index`, `empty_table`, `modify_column`, `pack_table`, `recover_table`, `change_password`, `set_field_validator`, `set_data_policies` (the last two block later writes) |
 
 `nxmcp.ServerInstructions.pas` holds `cServerInstructions`, the text sent as `instructions` in the `initialize` result (set in `nxmcp.dpr` unless `[Server] Instructions` in `nxmcp.ini` overrides it). It repeats rules from this file for the AI client — typed literals, `params`, dialect specifics, the one-session gate. **When a tool's behaviour or one of those rules changes, update the text too.**
 
@@ -235,9 +236,20 @@ The `[Connection] Mode` ini key (or `switch_server`'s `mode` param) selects how 
 }
 ```
 - Supports SELECT, INSERT, UPDATE, DELETE
-- All statements succeed together or all are rolled back
+- All statements succeed together or all are rolled back. Every statement is sent prefixed with `cNoAutoCommitOnDDL` (`#OPT::STATEMENT::AUTOCOMMITONDDL='0'`, `nxmcp.SqlUtils`), and statements mentioning `AUTOCOMMITONDDL` are refused: with that option on (e.g. at SESSION scope from an earlier `execute_sql`), NexusDB commits the transaction before each DDL statement and starts a new one, so the work before the DDL survived while the tool reported `transactionRolledBack: true` (verified on 4.75). With the prefix, DDL fails inside the transaction and everything is rolled back. `run_script` shares the constant and `MentionsAutoCommitOnDDL`.
 - `snapshot`: Use snapshot transaction for consistent point-in-time reads (default: false)
 - SELECT results include `data` array; non-SELECT results include `rowsAffected`
+
+**run_script** (`nxmcp.Tool.RunScript.pas`) exists because `batch_execute` runs each statement separately (a `#temp` table is gone by the next one) and `execute_query` must keep refusing multi-statement and `INTO`. Rules that keep it correct:
+- The whole script is one `nxQuery1.Open`. `TnxDataset.OpenCursor` (`nxdb.pas`) executes without raising when the last statement returns no cursor and just creates no fields, so `FieldCount = 0` means "no result set, read `RowsAffected`". Never fall back to `ExecSQL` after `Open`: that would run the script twice.
+- Always `ExecuteWithoutRetry` - a script may write and must never be replayed.
+- `InTransaction` asks the server (`TransactionGetLevel`), so it also sees `START TRANSACTION` issued inside the script. `RollbackAll` rolls back every level; in `commit` mode, still being in a transaction after our `Commit` means the script left a level open, so everything is rolled back and an error returned (nothing committed). A transaction already open at entry is a leftover (calls are serialized, no tool keeps one across calls), so it is rolled back and reported as `staleTransactionRolledBack` - refusing would be a dead end, no tool can end it. `RollbackAll` raises if levels remain after `cMaxRollbackLevels`.
+- Results are formatted by `FieldToJSON`, not `dataset.serialize`: column names stay as NexusDB returns them (no camel-casing; a repeated name is made unique by the dataset layer, e.g. a second `ID` becomes `ID_2` - verified), rows are arrays, dates are ISO 8601 without offset, BLOBs are base64 with no line breaks (`TBase64Encoding.Create(0)`) or `{bytes, md5}`. Currency: `TJSONNumber.Create(Currency)` serializes exactly, but the dataset already delivers a `Double` (`TCurrencyField` is a `TFloatField`, `TField.GetAsCurrency` = `GetAsFloat`), so precision is ~15 significant digits; `CurrToStr` would not help.
+- A failed script raises `EMCPToolError` whose message is the JSON error object (`success: false`, `error`, `errorCode` from `NexusErrorCode`, `rolledBack`, ...). The tools manager turns `EMCPToolError` into an `isError: true` result with the message as text, verbatim (no `Error executing tool:` prefix), so clients see a failed call and callers can still compare the exact NexusDB message. Parameter validation errors are re-raised as they are (plain tool errors).
+- NexusDB refuses DDL inside a transaction (`$3CA0/15520`), so DDL scripts need `transaction="none"`.
+- What can end the tool's transaction from inside a script (verified on 4.75): a bare SQL `COMMIT` cannot - NexusDB refuses it with "No explicit transaction is currently in progress" (the SQL-level and API-level transactions are tracked separately). `#OPT::...::AUTOCOMMITONDDL='1'` can: it commits before each DDL and starts a new transaction, so an INSERT before a CREATE TABLE survived "rollback" mode while the tool reported `rolledBack: true`. Hence scripts mentioning `AUTOCOMMITONDDL` are rejected in `rollback`/`commit` mode, and in those modes the script is sent prefixed (inline, on line 1) with `#OPT::STATEMENT::AUTOCOMMITONDDL='0'` (`cNoAutoCommitOnDDL`): options resolve from the statement outwards, so this also neutralizes the option inherited at SESSION/DATABASE scope from an earlier `execute_sql` or `run_script transaction="none"`. Side effect: a syntax error on line 1 reports a shifted position. As a further safety net, if `InTransactionNow` is False after the script the result carries a `warning` and `rolledBack`/`committed` false.
+- Every `InTransaction` probe and rollback goes through `InTransactionNow`/`RollbackAll`, i.e. inside `ExecuteWithoutRetry`: it is a server round-trip, and outside a boundary a dead socket would never retire the session.
+- A leading U+FEFF (script read from a UTF-8 file with BOM) is stripped: NexusDB does not skip it, it breaks a leading `--` comment and the first statement then fails with a syntax error.
 
 ### Query Parameters (execute_query / execute_sql)
 Both tools accept an optional `params` argument — a JSON array (passed as a string, like all complex tool arguments) binding values to `:name` placeholders in the SQL:

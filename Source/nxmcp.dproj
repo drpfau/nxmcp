@@ -100,6 +100,7 @@
         <DCCReference Include="nxmcp.Resource.Tables.pas"/>
         <DCCReference Include="nxmcp.Resource.Schema.pas"/>
         <DCCReference Include="nxmcp.Tool.ExecuteQuery.pas"/>
+        <DCCReference Include="nxmcp.Tool.RunScript.pas"/>
         <DCCReference Include="nxmcp.Tool.GetTableSchema.pas"/>
         <DCCReference Include="nxmcp.Tool.ExecuteSQL.pas"/>
         <DCCReference Include="nxmcp.Tool.GetTableData.pas"/>

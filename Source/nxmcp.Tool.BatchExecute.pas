@@ -115,6 +115,19 @@ begin
     raise Exception.Create('Statements array cannot be empty');
   end;
 
+  // AUTOCOMMITONDDL commits the transaction before each DDL statement, which would make
+  // "all succeed together or all are rolled back" - and transactionRolledBack - false.
+  // Every statement is sent with it forced off (cNoAutoCommitOnDDL below); one that
+  // mentions it could switch it back on, so it is refused before anything runs.
+  for I := 0 to LStatementsArray.Count - 1 do
+    if MentionsAutoCommitOnDDL(LStatementsArray.Items[I].Value) then
+    begin
+      LStatementsArray.Free;
+      raise Exception.CreateFmt('Statement %d uses AUTOCOMMITONDDL, which commits the transaction ' +
+        'before each DDL statement; batch_execute runs everything in one transaction. Use ' +
+        'execute_sql or run_script with transaction="none" instead.', [I]);
+    end;
+
   // Check connection (transparently reconnects if dropped).
   // Note: comm-lost AFTER the transaction starts is intentionally not retried —
   // the existing rollback path below surfaces a clean error to the caller.
@@ -163,6 +176,10 @@ begin
           LSql := '#V+ ' + LSql
         else if Params.Log then
           LSql := '#L+ ' + LSql;
+        // Keep the batch atomic even when AUTOCOMMITONDDL was switched on at SESSION or
+        // DATABASE scope by an earlier call: the statement-scoped '0' wins, so DDL fails
+        // inside the transaction instead of committing the statements before it.
+        LSql := cNoAutoCommitOnDDL + LSql;
 
         LStatementResult := nil;
         LDataArray := nil;

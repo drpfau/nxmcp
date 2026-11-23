@@ -8,12 +8,22 @@ Notable changes to nxmcp.
 
 * Tool annotations: every tool now states `readOnlyHint`, `destructiveHint`,
   `idempotentHint` and `openWorldHint` in `tools/list`, so clients can auto-approve or
-  parallelise the 9 read-only tools and ask before the 14 destructive ones (see CLAUDE.md
+  parallelise the 9 read-only tools and ask before the 15 destructive ones (see CLAUDE.md
   for the full classification). Without annotations the spec treats every tool as a
   possibly destructive write.
 * `initialize` now returns `instructions` for the AI client: NexusDB typed literals and
   `params`, the result date format, which tool to use for what, dialect specifics and the
   one-session gate. `[Server] Instructions` in `nxmcp.ini` replaces the built-in text.
+* Added `run_script`: runs a complete multi-statement script as one batch (so `#temp`
+  tables, variables and cursors live for the whole script) and returns the last result set
+  as typed JSON - `columns` (name, type) plus `rows` as arrays in column order, ISO 8601
+  dates, numbers as numbers, BLOBs as base64 or `{bytes, md5}` - or `rowsAffected`.
+  `transaction` is `rollback` (default, always rolled back), `commit` or `none` (for DDL);
+  transactions the script leaves open are always rolled back, and nothing is committed
+  after an error. Scripts using `AUTOCOMMITONDDL` (commits before each DDL) are refused in
+  `rollback`/`commit` mode. A failing script is a tool error (`isError: true`) whose text
+  is `{"success": false, "error": "...", "errorCode": n, "rolledBack": bool}` with the full NexusDB
+  message; invalid parameters are plain tool errors. `execute_query` keeps its single-read guard unchanged.
 
 ### Fixed
 
@@ -28,6 +38,11 @@ Notable changes to nxmcp.
 * `switch_database` and `switch_server` to the database that is already open ignored a
   `tablePassword` passed with them ("Already connected"). With a password they now reopen
   the same target and apply it; without one they remain a no-op.
+* `batch_execute` reported `transactionRolledBack: true` while statements before a DDL
+  statement stayed committed, when `AUTOCOMMITONDDL` had been switched on (e.g. at session
+  level by an earlier `execute_sql`): NexusDB commits before each DDL in that mode. Every
+  statement now runs with the option forced off, so DDL fails inside the transaction and the
+  whole batch is rolled back; statements that mention `AUTOCOMMITONDDL` are refused.
 * Re-adding a table password the session already holds no longer fails with
   `DBIERR_NAMENOTUNIQUE`, and a password retired by a switch is removed from the session.
 
