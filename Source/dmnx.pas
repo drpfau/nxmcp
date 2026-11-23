@@ -90,6 +90,9 @@ type
     procedure TearDownComponents(out AFirstError: string);
     procedure ReleaseDatasets;
     procedure CloseDatabaseForSwitch;
+    procedure RestoreDatabaseTarget(const AAliasName, AAliasPath: string);
+    procedure RetireAfterFailedRollback;
+    function RestorePreviousLevel(AWasDbOpen, AWasSessionOpen: Boolean): Boolean;
     procedure DisconnectForSwitch;
     function OpenTargetDatabase: Boolean;
     procedure RetireSessionAfterError(E: Exception);
@@ -181,6 +184,20 @@ uses
 
 var
   GLastError: string;
+
+const
+  // Appended to a failed switch's error when the rollback rebuilt the previous connection, so a
+  // caller can tell "switch failed, still on the old target" from "switch failed, now unusable".
+  cPreviousRestored = ' The previous connection was restored.';
+  cNothingToRestore = ' Nothing was connected before the switch; it is still disconnected.';
+
+function RestoredNote(AAnythingWasOpen: Boolean): string;
+begin
+  if AAnythingWasOpen then
+    Result := cPreviousRestored
+  else
+    Result := cNothingToRestore;
+end;
 
 /// <summary>
 /// Append a restart hint when the in-process engine is in the unrecoverable
@@ -816,6 +833,18 @@ begin
   if nxSqlEngine1.Active then
     nxSqlEngine1.Active := False;
 
+  // The tracked fields are the source of truth: copy them onto every component that is still
+  // inactive (as ConnectEmbedded does for the path). A switch rollback that failed part-way can
+  // leave the components on the failed target while the fields already name the old one; this
+  // makes the next (re)connect repair that instead of silently opening the failed target.
+  if not nxWinsockTransport1.Active then
+  begin
+    nxWinsockTransport1.ServerName := FServerHost;
+    nxWinsockTransport1.Port := FServerPort;
+  end;
+  if not nxDatabase1.Connected then
+    RestoreDatabaseTarget(FAliasName, FAliasPath);
+
   // Activate transport
   if not nxWinsockTransport1.Active then
     nxWinsockTransport1.Active := True;
@@ -1016,6 +1045,10 @@ begin
 
     if FServerMode = smRemote then
     begin
+      // The tracked fields are the source of truth, as in ConnectRemote (the transport is
+      // inactive after the ForceDisconnect above).
+      nxWinsockTransport1.ServerName := FServerHost;
+      nxWinsockTransport1.Port := FServerPort;
       nxWinsockTransport1.Active := True;
       nxRemoteServerEngine1.Active := True;
     end;
@@ -1061,6 +1094,44 @@ begin
       ForceDisconnect;
     end;
   end;
+end;
+
+procedure Tnxmodule.RestoreDatabaseTarget(const AAliasName, AAliasPath: string);
+begin
+  // Used by the switch rollbacks and ConnectRemote; the database must be closed. Clear BOTH first: TnxBaseDatabase
+  // only clears the other one when assigned a non-empty value (and assigning '' to an already
+  // empty AliasName is a no-op), so restoring an empty target would otherwise keep the failed
+  // attempt's alias or path and the rollback's reconnect could open that database instead.
+  nxDatabase1.AliasPath := '';
+  nxDatabase1.AliasName := '';
+  if AAliasPath <> '' then
+    nxDatabase1.AliasPath := AAliasPath
+  else if AAliasName <> '' then
+    nxDatabase1.AliasName := AAliasName;
+end;
+
+procedure Tnxmodule.RetireAfterFailedRollback;
+begin
+  // A rollback that could not finish may leave a half-built chain: Connect is fail-soft and
+  // opens the database before restoring the session passwords, so the database can report
+  // Connected with only part of its passwords - EnsureConnection would then reuse it. Tear it
+  // all down so the next call starts with a clean, complete reconnect. ForceDisconnect never raises.
+  ForceDisconnect;
+end;
+
+function Tnxmodule.RestorePreviousLevel(AWasDbOpen, AWasSessionOpen: Boolean): Boolean;
+begin
+  // Server-switch rollback: bring the restored target back up exactly as far as it was before
+  // the switch. Reopening a database that was closed (or that does not exist, when only a
+  // session was open, e.g. from list_aliases with no database configured) would either open
+  // something the caller never had open or report a rollback failure for a recoverable state.
+  // Like Reconnect, both report failure by returning False with GLastError set.
+  if AWasDbOpen then
+    Result := Reconnect
+  else if AWasSessionOpen then
+    Result := EnsureSession
+  else
+    Result := True;  // nothing was open before the switch: leave it disconnected
 end;
 
 procedure Tnxmodule.DisconnectForSwitch;
@@ -1227,6 +1298,8 @@ var
   LOldExtraPasswords: TArray<string>;
   LTargetDesc: string;
   LFailure: string;
+  LOldDbOpen: Boolean;
+  LOldSessionOpen: Boolean;
 begin
   GLastError := '';
 
@@ -1260,6 +1333,9 @@ begin
     LTargetDesc := 'alias "' + AAliasName + '"';
 
   // Save current state for rollback
+  // Including how far the connection was up: the rollback restores that level, no further.
+  LOldDbOpen := nxDatabase1.Connected;
+  LOldSessionOpen := nxSession1.Active;
   LOldAlias := FAliasName;
   LOldPath := FAliasPath;
   LOldPassword := FTablePassword;
@@ -1306,23 +1382,46 @@ begin
 
       // Attempt to rollback to the previous target (name or path)
       try
+        // The failure can come after the new database opened (e.g. while applying its
+        // passwords); AliasName/AliasPath cannot be assigned to a connected database.
+        // Close it first - CloseDatabaseForSwitch falls back to ForceDisconnect, and
+        // OpenTargetDatabase then rebuilds the chain via Connect.
+        // Only while still connected: after RetireSessionAfterError the session is down, and
+        // CloseDatabaseForSwitch would just log a misleading "graceful close failed" warning.
+        if nxDatabase1.Connected then
+          CloseDatabaseForSwitch;
         FAliasName := LOldAlias;
         FAliasPath := LOldPath;
         FTablePassword := LOldPassword;
         FTablePasswordIsCommaList := LOldPasswordIsCommaList;
         FExtraTablePasswords := LOldExtraPasswords;
-        if LOldPath <> '' then
-          nxDatabase1.AliasPath := LOldPath
-        else
-          nxDatabase1.AliasName := LOldAlias;
+        RestoreDatabaseTarget(LOldAlias, LOldPath);
 
-        // OpenTargetDatabase reapplies the restored password using the restored
-        // comma-list flag, so a rolled-back legacy TablePassword is split again.
-        if not OpenTargetDatabase then
-          raise Exception.Create(GLastError);
+        // Restore the level that was up before the switch. switch_database runs on a session
+        // whose database may be closed (it uses EnsureSession), so do not open a database
+        // that was not open. OpenTargetDatabase reapplies the restored password using the
+        // restored comma-list flag, so a rolled-back legacy TablePassword is split again.
+        if LOldDbOpen then
+        begin
+          if not OpenTargetDatabase then
+            raise Exception.Create(GLastError);
+        end
+        else if LOldSessionOpen then
+        begin
+          // Always replace the session: Active is a client-side flag, and after e.g. a timeout
+          // inside the fail-soft Connect (whose error arrives here unclassified) it can stay
+          // True on a poisoned session. Report "restored" only for a freshly opened one.
+          ForceDisconnect;
+          if not EnsureSession then
+            raise Exception.Create(GLastError);
+        end;
+        LFailure := LFailure + RestoredNote(LOldDbOpen or LOldSessionOpen);
       except
         on E2: Exception do
+        begin
           LFailure := LFailure + ' Rollback also failed: ' + E2.Message;
+          RetireAfterFailedRollback;
+        end;
       end;
 
       GLastError := WithFatalHint(LFailure);
@@ -1372,6 +1471,8 @@ var
   LOldExtraPasswords: TArray<string>;
   LOldUseIniPasswords: Boolean;
   LFailure: string;
+  LOldDbOpen: Boolean;
+  LOldSessionOpen: Boolean;
 begin
   GLastError := '';
 
@@ -1392,6 +1493,9 @@ begin
   end;
 
   // Save current state for rollback
+  // Including how far the connection was up: the rollback restores that level, no further.
+  LOldDbOpen := nxDatabase1.Connected;
+  LOldSessionOpen := nxSession1.Active;
   LOldMode := FServerMode;
   LOldHost := FServerHost;
   LOldPort := FServerPort;
@@ -1454,6 +1558,14 @@ begin
 
       // Attempt to rollback to previous server
       try
+        // The failed attempt can leave the transport and session active (e.g. the server
+        // answered but the database did not open). This is the only teardown that runs here:
+        // the failure arrives through the fail-soft Connect as a plain Exception without a
+        // NexusDB error code, so RetireSessionAfterError above never classifies it - do not
+        // remove this as redundant. Assigning ServerName/AliasName to an active component
+        // raises "must be inactive" and skipped the whole restore, leaving the old fields with
+        // the new server. Tear everything down first; Reconnect rebuilds.
+        ForceDisconnect;
         FServerMode := LOldMode;
         FServerHost := LOldHost;
         FServerPort := LOldPort;
@@ -1465,17 +1577,22 @@ begin
         FUseIniTablePasswords := LOldUseIniPasswords;
         nxWinsockTransport1.ServerName := LOldHost;
         nxWinsockTransport1.Port := LOldPort;
-        if LOldPath <> '' then
-          nxDatabase1.AliasPath := LOldPath
-        else
-          nxDatabase1.AliasName := LOldAlias;
+        RestoreDatabaseTarget(LOldAlias, LOldPath);
 
         // Connect reports failure by returning False, not by raising.
-        if not Reconnect then
+        if not RestorePreviousLevel(LOldDbOpen, LOldSessionOpen) then
+        begin
           LFailure := LFailure + ' Rollback also failed: ' + GLastError;
+          RetireAfterFailedRollback;
+        end
+        else
+          LFailure := LFailure + RestoredNote(LOldDbOpen or LOldSessionOpen);
       except
         on E2: Exception do
+        begin
           LFailure := LFailure + ' Rollback also failed: ' + E2.Message;
+          RetireAfterFailedRollback;
+        end;
       end;
 
       GLastError := WithFatalHint(LFailure);
@@ -1497,6 +1614,8 @@ var
   LOldExtraPasswords: TArray<string>;
   LOldUseIniPasswords: Boolean;
   LFailure: string;
+  LOldDbOpen: Boolean;
+  LOldSessionOpen: Boolean;
 begin
   GLastError := '';
 
@@ -1527,6 +1646,9 @@ begin
   end;
 
   // Save current state for rollback
+  // Including how far the connection was up: the rollback restores that level, no further.
+  LOldDbOpen := nxDatabase1.Connected;
+  LOldSessionOpen := nxSession1.Active;
   LOldMode := FServerMode;
   LOldHost := FServerHost;
   LOldPort := FServerPort;
@@ -1567,6 +1689,9 @@ begin
 
       // Attempt to rollback to the previous mode/target
       try
+        // As in SwitchServer: components left active by the failed attempt reject the
+        // property assignments below, so tear everything down first; Reconnect rebuilds.
+        ForceDisconnect;
         FServerMode := LOldMode;
         FServerHost := LOldHost;
         FServerPort := LOldPort;
@@ -1578,17 +1703,22 @@ begin
         FUseIniTablePasswords := LOldUseIniPasswords;
         nxWinsockTransport1.ServerName := LOldHost;
         nxWinsockTransport1.Port := LOldPort;
-        if LOldPath <> '' then
-          nxDatabase1.AliasPath := LOldPath
-        else
-          nxDatabase1.AliasName := LOldAlias;
+        RestoreDatabaseTarget(LOldAlias, LOldPath);
 
         // Connect reports failure by returning False, not by raising.
-        if not Reconnect then
+        if not RestorePreviousLevel(LOldDbOpen, LOldSessionOpen) then
+        begin
           LFailure := LFailure + ' Rollback also failed: ' + GLastError;
+          RetireAfterFailedRollback;
+        end
+        else
+          LFailure := LFailure + RestoredNote(LOldDbOpen or LOldSessionOpen);
       except
         on E2: Exception do
+        begin
           LFailure := LFailure + ' Rollback also failed: ' + E2.Message;
+          RetireAfterFailedRollback;
+        end;
       end;
 
       GLastError := WithFatalHint(LFailure);
