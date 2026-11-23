@@ -2,7 +2,12 @@
 
 Notable changes to nxmcp.
 
-## [Unreleased]
+## [7.0.0.0] - 2026-11-23
+
+Major version because the build and some tool contracts changed: nxmcp now needs
+Delphi-MCP-Server `f950352` (with `src` and `src\Prompts` on the library path), INI table
+passwords are never sent to another server, `batch_execute` refuses statements that use
+`AUTOCOMMITONDDL`, and every tool now declares MCP annotations that clients act on.
 
 ### Added
 

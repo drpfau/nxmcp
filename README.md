@@ -72,7 +72,7 @@ LogFileName=
 Port=3000
 Host=localhost
 Name=nxmcp
-Version=6.0.0.0
+Version=7.0.0.0
 Endpoint=/mcp
 ; Optional: replaces the built-in NexusDB hints sent to clients in "instructions"
 ;Instructions=
