@@ -29,8 +29,10 @@ const
     'do not know. DDL cannot run inside a transaction.' + #10 +
     #10 +
     'run_script runs a whole script as ONE batch (SELECT ... INTO #temp chains, variables,' + #10 +
-    'cursors) and returns the last result set. It rolls everything back unless' + #10 +
-    'transaction="commit"; DDL needs transaction="none". Its result format differs from' + #10 +
+    'cursors) and returns the last result set. The default transaction="rollback" undoes' + #10 +
+    'everything; transaction="commit" keeps the changes. transaction="none" (needed for DDL)' + #10 +
+    'starts no transaction: what the script does persists, also when a later statement' + #10 +
+    'fails - it is never a dry run. Its result format differs from' + #10 +
     'execute_query: rows are arrays in column order, column names are exactly as NexusDB' + #10 +
     'returns them (not camelCased), DATETIME has no offset. A failing script is a tool error' + #10 +
     'whose text is JSON with the exact NexusDB message in "error".' + #10 +

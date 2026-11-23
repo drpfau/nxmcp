@@ -112,7 +112,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `switch_server` | Switch server connection (full reconnect): `mode` remote/embedded; optional `aliasName`/`aliasPath` |
 
 ### Tool Annotations and Server Instructions
-Every tool constructor calls `AnnotateTool(FAnnotations, <kind>)` (`nxmcp.ToolAnnotations.pas`), which sets all four MCP hints explicitly (`openWorldHint` is always false). Clients use them to auto-approve or parallelise calls, so they are a promise: **a new tool must pick a kind**, and `tkReadOnly` only when the tool changes nothing at all — data, schema, session or server state.
+Every tool constructor calls `AnnotateTool(FAnnotations, <kind>)` (`nxmcp.ToolAnnotations.pas`), which sets all four MCP hints explicitly (`openWorldHint` is false except for `switch_server`, which passes `AOpenWorld=True` because it connects to any host and port the caller names). Clients use them to auto-approve or parallelise calls, so they are a promise: **a new tool must pick a kind**, and `tkReadOnly` only when the tool changes nothing at all — data, schema, session or server state.
 
 | Kind | Hints | Tools |
 |------|-------|-------|

@@ -73,7 +73,9 @@ constructor TSwitchServerTool.Create;
 begin
   inherited;
   FName := 'switch_server';
-  AnnotateTool(FAnnotations, tkIdempotent);
+  // Open world: it connects to whatever host and port the caller names, not only to
+  // servers this installation already knows.
+  AnnotateTool(FAnnotations, tkIdempotent, True);
   FTitle := 'Switch Server';
   FDescription := 'Switch the NexusDB server connection. mode="remote" (default) connects to ' +
                   'an NXserver; mode="embedded" runs an in-process local NexusDB server. ' +

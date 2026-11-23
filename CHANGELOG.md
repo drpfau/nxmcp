@@ -48,6 +48,13 @@ passwords are never sent to another server, `batch_execute` refuses statements t
   level by an earlier `execute_sql`): NexusDB commits before each DDL in that mode. Every
   statement now runs with the option forced off, so DDL fails inside the transaction and the
   whole batch is rolled back; statements that mention `AUTOCOMMITONDDL` are refused.
+* The `initialize` instructions and the `run_script` description implied that only
+  `transaction="commit"` keeps changes. They now say that `transaction="none"` starts no
+  transaction, so its changes persist even when a later statement fails. The `none`-mode error
+  hint no longer claims that everything before the failure was applied; uncommitted work in a
+  transaction the script opened itself is undone.
+* `switch_server` is now annotated `openWorldHint: true`: it can connect to any host and port
+  the caller names. All other tools stay closed-world.
 * Re-adding a table password the session already holds no longer fails with
   `DBIERR_NAMENOTUNIQUE`, and a password retired by a switch is removed from the session.
 

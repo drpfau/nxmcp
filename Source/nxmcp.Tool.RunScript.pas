@@ -30,7 +30,9 @@ type
     [SchemaDescription('"rollback" (default): run inside a transaction that is always rolled back, also on ' +
       'error. "commit": run inside a transaction committed on success, rolled back on error. "none": no ' +
       'explicit transaction - needed for DDL (e.g. CREATE TABLE ##x), which NexusDB refuses inside a ' +
-      'transaction. In every mode, transactions the script itself leaves open are rolled back.')]
+      'transaction. In "none" mode whatever the script does persists, also when a later statement ' +
+      'fails: it is never a dry run. In every mode, transactions the script itself leaves open are ' +
+      'rolled back.')]
     property Transaction: string read FTransaction write FTransaction;
 
     [Optional]
@@ -243,7 +245,8 @@ begin
                   'BLOBs are base64 (or {bytes, md5} with blobFormat="md5"). Without a result set the answer ' +
                   'has rowsAffected instead. ' +
                   'WRITES ARE ALLOWED. By default everything runs inside a transaction that is always ' +
-                  'rolled back (transaction="rollback"); use "commit" to keep the changes, or "none" for DDL. ' +
+                  'rolled back (transaction="rollback"); use "commit" to keep the changes. "none" (needed for DDL) ' +
+                  'starts no transaction, so its changes persist even if a later statement fails. ' +
                   'A failing script is a tool error (isError) whose text is the JSON object ' +
                   '{"success": false, "error": "...", "errorCode": n, "rolledBack": bool} with the full NexusDB message; ' +
                   'invalid parameters are plain tool errors. ' +
@@ -487,10 +490,19 @@ begin
           // A separate field, so the NexusDB message stays exactly as the server sent it.
           if (LMode <> stmNone) and ContainsText(E.Message, 'DDL statements cannot execute while a transaction is active') then
             LErrorObj.AddPair('hint', 'NexusDB refuses DDL (CREATE/DROP/ALTER, also on #temp tables) inside a ' +
-              'transaction. Use transaction="none". SELECT ... INTO #temp is not DDL and works in every mode.')
+              'transaction. Use transaction="none" - its changes persist, it is not a dry run. ' +
+              'SELECT ... INTO #temp is not DDL and works in every mode.')
+          // In "none" mode, work the script ran outside a transaction, or had already committed,
+          // stays. Uncommitted work inside a transaction the script opened itself (START
+          // TRANSACTION) does not: on 4.75 NexusDB discards that transaction when a statement in
+          // it fails (verified - rolledBack is then false, nothing was left to roll back), and if
+          // it is still open, RollbackAll undoes it (rolledBack true). One hint covers both, so it
+          // never contradicts rolledBack.
           else if LMode = stmNone then
-            LErrorObj.AddPair('hint', 'transaction="none": any statements that ran before the failing one were ' +
-              'applied and are not undone.');
+            LErrorObj.AddPair('hint', 'transaction="none": work that ran outside a transaction, or that ' +
+              'the script had already committed, before the failure stays applied. Uncommitted work inside ' +
+              'a transaction the script opened itself was undone - by NexusDB, or by this tool''s cleanup ' +
+              '(then rolledBack is true) - unless rollbackError is present.');
           if LStaleRolledBack then
             LErrorObj.AddPair('staleTransactionRolledBack', TJSONBool.Create(True));
           LErrorObj.AddPair('transaction', cTransactionModeNames[LMode]);

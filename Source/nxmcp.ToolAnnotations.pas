@@ -36,10 +36,13 @@ type
 
 /// <summary>
 ///  Sets readOnlyHint, destructiveHint, idempotentHint and openWorldHint on
-///  Annotations (created when nil; the tool base frees it). openWorldHint is always
-///  false: every tool works only on the NexusDB server it is connected to.
+///  Annotations (created when nil; the tool base frees it). openWorldHint is false by
+///  default: almost every tool works only on the NexusDB server it is connected to.
+///  Pass AOpenWorld=True for a tool that can reach an endpoint the caller chooses
+///  (switch_server connects to any host and port it is given).
 /// </summary>
-procedure AnnotateTool(var Annotations: TJSONObject; Kind: TnxToolKind);
+procedure AnnotateTool(var Annotations: TJSONObject; Kind: TnxToolKind;
+  AOpenWorld: Boolean = False);
 
 implementation
 
@@ -57,12 +60,13 @@ begin
   Annotations.AddPair(Name, TJSONBool.Create(Value));
 end;
 
-procedure AnnotateTool(var Annotations: TJSONObject; Kind: TnxToolKind);
+procedure AnnotateTool(var Annotations: TJSONObject; Kind: TnxToolKind;
+  AOpenWorld: Boolean);
 begin
   if not Assigned(Annotations) then
     Annotations := TJSONObject.Create;
   SetHint(Annotations, MCP_ANNOTATION_READ_ONLY_HINT, Kind = tkReadOnly);
-  SetHint(Annotations, MCP_ANNOTATION_OPEN_WORLD_HINT, False);
+  SetHint(Annotations, MCP_ANNOTATION_OPEN_WORLD_HINT, AOpenWorld);
   // The spec gives destructiveHint/idempotentHint meaning only when readOnlyHint is
   // false, so a read-only tool carries just the two hints above.
   if Kind <> tkReadOnly then
