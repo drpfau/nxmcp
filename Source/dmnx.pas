@@ -1414,7 +1414,12 @@ begin
           ForceDisconnect;
           if not EnsureSession then
             raise Exception.Create(GLastError);
-        end;
+        end
+        else
+          // Nothing was open before. The failed attempt may still have brought the chain up
+          // (OpenTargetDatabase falls back to the fail-soft Connect, which opens the session
+          // before the database open fails), so tear it down to really restore "nothing".
+          ForceDisconnect;
         LFailure := LFailure + RestoredNote(LOldDbOpen or LOldSessionOpen);
       except
         on E2: Exception do
