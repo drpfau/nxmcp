@@ -75,6 +75,7 @@ uses
   Data.DB,
   Data.FmtBcd,
   MCPServer.Registration,
+  MCPServer.Errors,
   nxmcp.NexusErrors,
   nxmcp.QueryParams,
   dmnx;
@@ -233,8 +234,9 @@ begin
                   'of the last statement as typed JSON: columns (name, Delphi field type) and rows as arrays in column ' +
                   'order. WRITES ARE ALLOWED. By default everything runs inside a transaction that is always ' +
                   'rolled back (transaction="rollback"); use "commit" to keep the changes, or "none" for DDL. ' +
-                  'Errors raised while running the script are returned as {"success": false, "error": "...", "errorCode": n} ' +
-                  'with the full NexusDB message; invalid parameters are reported as tool errors. ' +
+                  'A failing script is a tool error (isError) whose text is the JSON object ' +
+                  '{"success": false, "error": "...", "errorCode": n, "rolledBack": bool} with the full NexusDB message; ' +
+                  'invalid parameters are plain tool errors. ' +
                   'For a single read prefer execute_query.';
 end;
 
@@ -256,6 +258,7 @@ var
   LCommitting: Boolean;
   LRollbackError: string;
   LErrorObj: TJSONObject;
+  LErrorJson: string;
   LCode: Integer;
 begin
   // Scripts read from a UTF-8 file with a BOM arrive with a leading U+FEFF, which NexusDB does not
@@ -482,7 +485,7 @@ begin
             LErrorObj.AddPair('staleTransactionRolledBack', TJSONBool.Create(True));
           LErrorObj.AddPair('transaction', cTransactionModeNames[LMode]);
           LErrorObj.AddPair('elapsedMs', TJSONNumber.Create(LStopwatch.ElapsedMilliseconds));
-          Result := LErrorObj.ToJSON;
+          LErrorJson := LErrorObj.ToJSON;
         finally
           LErrorObj.Free;
         end;
@@ -491,11 +494,17 @@ begin
         // mistake, not a script failure: report it as a tool error, like the other argument checks.
         if not LExecuting and (NexusErrorCode(E) = 0) then
           raise;
+
+        // A failed script is a failed tool call: clients rely on isError to tell success from
+        // failure. EMCPToolError makes the tools manager answer isError=true with this message
+        // as the text, verbatim (no "Error executing tool:" prefix), so the body stays the same
+        // JSON object and callers can still compare the exact NexusDB message in "error".
+        raise EMCPToolError.Create(LErrorJson);
       end;
     end;
   finally
     // Best-effort: with a cursor still open (its Close above may have failed) the write is forwarded
-    // to it, and nothing raised here may replace the result built above.
+    // to it, and nothing raised here may replace the result or the error built above.
     try
       nxmodule.nxQuery1.Timeout := LOldTimeout;
     except

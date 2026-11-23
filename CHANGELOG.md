@@ -21,9 +21,9 @@ Notable changes to nxmcp.
   `transaction` is `rollback` (default, always rolled back), `commit` or `none` (for DDL);
   transactions the script leaves open are always rolled back, and nothing is committed
   after an error. Scripts using `AUTOCOMMITONDDL` (commits before each DDL) are refused in
-  `rollback`/`commit` mode. Errors raised by the script are returned as
-  `{"success": false, "error": "...", "errorCode": n, "rolledBack": bool}` with the full NexusDB message;
-  invalid parameters are tool errors. `execute_query` keeps its single-read guard unchanged.
+  `rollback`/`commit` mode. A failing script is a tool error (`isError: true`) whose text
+  is `{"success": false, "error": "...", "errorCode": n, "rolledBack": bool}` with the full NexusDB
+  message; invalid parameters are plain tool errors. `execute_query` keeps its single-read guard unchanged.
 
 ### Fixed
 
