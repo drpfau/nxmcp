@@ -25,6 +25,9 @@ Notable changes to nxmcp.
   tool-supplied `tablePassword` is added on top of them. `switch_server` back to the
   INI-configured server (same host and port, or embedded when that is the INI mode)
   reapplies them; another server never receives them, only a tool-supplied password.
+* `switch_database` and `switch_server` to the database that is already open ignored a
+  `tablePassword` passed with them ("Already connected"). With a password they now reopen
+  the same target and apply it; without one they remain a no-op.
 * Re-adding a table password the session already holds no longer fails with
   `DBIERR_NAMENOTUNIQUE`, and a password retired by a switch is removed from the session.
 

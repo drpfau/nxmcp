@@ -101,7 +101,10 @@ begin
   else
     LAlreadyThere := SameText(Params.AliasName, nxmodule.AliasName);
 
-  if LAlreadyThere and nxmodule.IsConnected then
+  // A tablePassword must still take effect on the current database, so only a call
+  // without one is a no-op; with one, the regular switch reopens the same target and
+  // replaces the tool-supplied password (the INI passwords stay, as on any switch).
+  if LAlreadyThere and nxmodule.IsConnected and (Params.TablePassword = '') then
   begin
     LResultObj := TJSONObject.Create;
     try

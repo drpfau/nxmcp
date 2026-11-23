@@ -115,9 +115,10 @@ begin
     if Trim(Params.AliasPath) = '' then
       raise Exception.Create('Embedded mode requires aliasPath');
 
-    // Already running embedded on this path?
+    // Already running embedded on this path? Only a no-op without a tablePassword:
+    // one passed here must still take effect, so the regular switch applies it.
     if nxmodule.IsEmbedded and SameText(Params.AliasPath, nxmodule.AliasPath) and
-       nxmodule.IsConnected then
+       nxmodule.IsConnected and (Params.TablePassword = '') then
     begin
       LResultObj := TJSONObject.Create;
       try
@@ -163,8 +164,9 @@ begin
   if (Trim(Params.AliasName) <> '') and (Trim(Params.AliasPath) <> '') then
     raise Exception.Create('Provide either aliasName or aliasPath, not both');
 
-  // Check if already connected to same remote server (and same database target)
-  if (not nxmodule.IsEmbedded) and
+  // Check if already connected to same remote server (and same database target).
+  // Only a no-op without a tablePassword: one passed here must still take effect.
+  if (Params.TablePassword = '') and (not nxmodule.IsEmbedded) and
      SameText(Params.ServerHost, nxmodule.ServerHost) and
      ((Params.ServerPort = 0) or (Params.ServerPort = nxmodule.ServerPort)) and
      ((Params.AliasName = '') or SameText(Params.AliasName, nxmodule.AliasName)) and
