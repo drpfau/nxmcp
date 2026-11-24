@@ -34,6 +34,12 @@ Notable changes to nxmcp.
   configured, session opened by `list_aliases`) reopens just the session instead of trying to
   open a database and reporting "Rollback also failed"; a closed database stays closed.
   `EnsureSession` also takes the host and port from the tracked fields now.
+* A failed `switch_database` (or embedded-to-embedded switch) now keeps the original session
+  when it survived the attempt, instead of always tearing it down - in embedded mode that
+  teardown also restarted the in-process engine. Conversely, a session that the failed
+  attempt had built itself (after a lost connection) is never reused by the rollback, also
+  when the database was open before: an unclassified timeout can leave such a session
+  reporting Active while unusable.
 
 ### Changed
 
